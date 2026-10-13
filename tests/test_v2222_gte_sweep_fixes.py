@@ -38,7 +38,7 @@ from custom_components.vag_connect.const import (
 from custom_components.vag_connect.coordinator import VagConnectCoordinator
 
 _VALIDATE = "custom_components.vag_connect.config_flow._validate_credentials"
-_VIN = "WVWZZZAUZFW805377"  # repo-standard MBB test VIN (Golf GTE)
+_VIN = "WVWZZZAUZFW000000"  # repo-standard MBB test VIN (Golf GTE)
 
 
 def _flow() -> VagConnectConfigFlow:

@@ -23,7 +23,7 @@ from custom_components.vag_connect.const import (
 )
 from custom_components.vag_connect.coordinator import VagConnectCoordinator
 
-VIN = "WVWZZZAUZFW805377"
+VIN = "WVWZZZAUZFW000000"
 
 
 def _supp(name: str, vd: VehicleData):

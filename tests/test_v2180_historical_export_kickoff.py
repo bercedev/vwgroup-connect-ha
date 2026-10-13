@@ -28,7 +28,7 @@ from custom_components.vag_connect.cariad.auth._data_act_scraper import (
     DataActSessionExpiredError,
 )
 
-_VIN = "WAUZZZF29MN024037"
+_VIN = "WAUZZZF29MN000000"
 
 
 class _Resp:

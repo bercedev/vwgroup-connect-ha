@@ -28,7 +28,7 @@ from custom_components.vag_connect.cariad.auth._eu_data_act import EUDataActConn
 from custom_components.vag_connect.cariad.exceptions import APIError
 from custom_components.vag_connect.cariad.models import VehicleData
 
-_VIN = "WVWZZZAUZFW805377"
+_VIN = "WVWZZZAUZFW000000"
 
 
 def _conn() -> EUDataActConnector:

@@ -191,7 +191,7 @@ async def test_the_time_reaches_vehicle_data():
     from custom_components.vag_connect.companion.client import CompanionClient
 
     client = CompanionClient.__new__(CompanionClient)
-    client._brand, client._vin, client._last_data = "volkswagen", "WVWZZZAUZFW805377", None
+    client._brand, client._vin, client._last_data = "volkswagen", "WVWZZZAUZFW000000", None
     client._channel = CompanionChannel(OverviewPhone(), PRESETS["volkswagen"], time_fn=lambda: 0.0,
                                        wall_clock_fn=lambda: T0.timestamp())
     data = await client.get_status(client._vin)

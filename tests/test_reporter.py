@@ -561,7 +561,7 @@ class TestReporterVinPrivacy:
     """
 
     # Real-world-shaped Audi VIN (17 chars, valid VIN charset, no I/O/Q).
-    AUDI_VIN = "WAUZZZGE7RB026421"
+    AUDI_VIN = "WAUZZZGE7RB000000"
 
     def test_safe_model_sanitization_rules(self):
         from custom_components.vag_connect.cariad._reporter_pipeline import (

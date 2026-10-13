@@ -30,8 +30,8 @@ from custom_components.vag_connect.coordinator import VagConnectCoordinator
 
 _MOD = "custom_components.vag_connect.coordinator"
 
-VIN_ACTIVE = "WVWZZZ3CZ9W025570"
-VIN_DISABLED = "WVGZZZE27PP016396"  # e.g. a sold car, device disabled by the user
+VIN_ACTIVE = "WVWZZZ3CZ9W000000"
+VIN_DISABLED = "WVGZZZE27PP000000"  # e.g. a sold car, device disabled by the user
 
 
 def _coord() -> VagConnectCoordinator:

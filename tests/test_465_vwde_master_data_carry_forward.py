@@ -33,7 +33,7 @@ from custom_components.vag_connect.cariad.vehicle_cache import (
     reconcile,
 )
 
-VIN = "WVGZZZ5NZPM465017"
+VIN = "WVGZZZ5NZPM000000"
 
 
 # ── (A) reconcile carry-forward of the immutable vw.de master data ──────────────

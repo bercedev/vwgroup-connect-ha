@@ -32,7 +32,7 @@ In Bruno auf Environment-Icon (oben rechts) klicken, dann `mbb.local` editieren:
 
 | Variable | Wert | Wo herkriegen? |
 |---|---|---|
-| `vin` | `WVWZZZAUZFW805377` | Dein Golf 7 GTE VIN |
+| `vin` | `WVWZZZAUZFW000000` (Platzhalter) | Deine eigene VIN — nur in `mbb.local.bru`, die ist gitignored. **Nie committen**, auch nicht die eigene: siehe [CONTRIBUTING.md](../../../CONTRIBUTING.md) → „What goes in the repo / fixtures / commits". |
 | `brand` | `VW` | Festwert (VW / Audi / Skoda) |
 | `country` | `DE` / `CH` | Dein Country |
 | `idk_id_token` | aus HA-Logs (siehe unten) | wird gleich erklärt |

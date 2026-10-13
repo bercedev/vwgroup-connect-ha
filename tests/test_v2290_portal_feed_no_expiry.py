@@ -25,7 +25,7 @@ from custom_components.vag_connect.cariad.auth._data_act_scraper import (
     DataActScraper,
 )
 
-_VIN = "WVWZZZAUZFW805377"
+_VIN = "WVWZZZAUZFW000000"
 
 
 class _Resp:

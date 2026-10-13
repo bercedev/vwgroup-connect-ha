@@ -263,7 +263,7 @@ async def test_delete_vehicle_is_never_tapped_in_any_walk():
 def _client(phone) -> CompanionClient:
     client = CompanionClient.__new__(CompanionClient)
     client._brand = "volkswagen"
-    client._vin = "WVWZZZAUZFW805377"
+    client._vin = "WVWZZZAUZFW000000"
     client._channel = channel_for(phone)
     return client
 
@@ -702,7 +702,7 @@ async def test_loop_does_nothing_while_off_and_restarts_the_count(monkeypatch):
 # ── b5: the two sensors ───────────────────────────────────────────────────────
 
 def _sensor(cls, vehicle):
-    vin = "WVWZZZAUZFW805377"
+    vin = "WVWZZZAUZFW000000"
     sensor = cls.__new__(cls)
     sensor._vin = vin
     sensor.coordinator = MagicMock()

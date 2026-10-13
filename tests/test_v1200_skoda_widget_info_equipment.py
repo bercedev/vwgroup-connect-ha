@@ -44,7 +44,7 @@ class TestSkodaWidgetParseBlock:
                 cur = cur.get(k)
             return cur
 
-        veh = VehicleData(vin="TMBJR8NX2RY179915")
+        veh = VehicleData(vin="TMBJR8NX2RY000000")
         if isinstance(widget, dict):
             vehicle_meta = v(widget, "vehicle") or {}
             if isinstance(vehicle_meta, dict):

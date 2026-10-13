@@ -44,12 +44,12 @@ class TestPushBaseTypes:
     def test_push_update_event_is_frozen_dataclass(self):
         from custom_components.vag_connect.cariad.push.base import PushUpdateEvent
         e = PushUpdateEvent(
-            vin="TMBJR8NX2RY179915",
+            vin="TMBJR8NX2RY000000",
             event_type="vehicle-event",
             topic="user/vin/event/topic",
             timestamp="2026-05-04T15:00:00Z",
         )
-        assert e.vin == "TMBJR8NX2RY179915"
+        assert e.vin == "TMBJR8NX2RY000000"
         assert e.event_type == "vehicle-event"
         assert e.raw_payload is None
         # Frozen → can't mutate

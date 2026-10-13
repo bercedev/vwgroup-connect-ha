@@ -45,7 +45,12 @@ maintainer-side rules below still apply.
   removed, GPS rounded to 1 decimal (~11 km bucket)
 - ✅ Issue / PR cross-references that name the contributor by
   GitHub handle (which is already public)
-- ❌ Full VINs (17 chars), even from the tester's own car
+- ❌ Full VINs (17 chars), even from the tester's own car — CI enforces this
+  (`scripts/check_no_real_vins.py`). Use a placeholder that keeps the shape but
+  is visibly invented: keep the manufacturer, model code, model-year letter and
+  plant letter, and zero the six-digit serial, e.g. `WVWZZZAUZFW000000`. Give two
+  cars in the same test two different placeholders, so a test that distinguishes
+  them still can.
 - ❌ Access / refresh / id-tokens, S-PIN values
 - ❌ User-IDs (UUIDs), account-IDs, email addresses
 - ❌ Exact GPS coordinates (more than 1 decimal place)

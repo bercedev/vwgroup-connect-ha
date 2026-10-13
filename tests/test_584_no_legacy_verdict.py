@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 from custom_components.vag_connect.cariad.api.vw_eu import VWEUClient
 from custom_components.vag_connect.cariad.exceptions import APIError
 
-VIN = "WVWZZZAUZFW805377"
+VIN = "WVWZZZAUZFW000000"
 _URL = "https://mal-1a.prd.ece.vwg-connect.com/api/rolesrights/operationlist/v3"
 _AUTH_401 = APIError(
     401, _URL,

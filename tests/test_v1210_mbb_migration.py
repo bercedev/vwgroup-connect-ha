@@ -152,11 +152,11 @@ class TestMBBURLBuilders:
             read_base="https://msg.volkswagen.de",
             brand="audi",
             country="DE",
-            vin="WAUZZZF43JA027519",
+            vin="WAUZZZF43JA000000",
         )
         assert url == (
             "https://msg.volkswagen.de/fs-car/bs/vsr/v1/Audi/DE/"
-            "vehicles/WAUZZZF43JA027519/requests"
+            "vehicles/WAUZZZF43JA000000/requests"
         )
 
     def test_build_mbb_wake_url_vw_de(self):
@@ -165,11 +165,11 @@ class TestMBBURLBuilders:
             read_base="https://msg.volkswagen.de",
             brand="volkswagen",
             country="DE",
-            vin="WVWZZZAUZFW805377",
+            vin="WVWZZZAUZFW000000",
         )
         assert url == (
             "https://msg.volkswagen.de/fs-car/bs/vsr/v1/VW/DE/"
-            "vehicles/WVWZZZAUZFW805377/requests"
+            "vehicles/WVWZZZAUZFW000000/requests"
         )
 
     def test_build_mbb_wake_url_other_country(self):
