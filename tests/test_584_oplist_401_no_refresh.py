@@ -33,6 +33,8 @@ _URL = "https://mal-1a.prd.ece.vwg-connect.com/api/rolesrights/operationlist/v3"
 _AUTH_401 = APIError(401, _URL, '{"error":{"errorCode":"gw.error.authentication","description":"Unauthorized"}}')
 _ACL_403 = APIError(403, _URL, '{"error":{"errorCode":"mbbc.rolesandrights.unauthorized","description":"Did not find permission for systemId \'XID_APP_VW\'"}}')
 _ACL_401 = APIError(401, _URL, '{"error":{"errorCode":"mbbc.rolesandrights.unauthorized"}}')
+# #1766 — after the gw.error.authentication 401 the EU-DP host is asked once.
+_EUDP_404 = APIError(404, "https://mal-3a.prd.eu.dp.vwg-connect.com/api/rolesrights/operationlist/v3", "")
 
 _GOOD = {"operationList": {"vin": VIN, "role": "PRIMARY_USER", "status": "ENABLED",
                            "serviceInfo": [{"serviceId": "rclima_v1",
@@ -50,23 +52,25 @@ class TestOplist401NoRefresh:
     def test_gw_error_authentication_returns_none_without_refresh(self) -> None:
         # The core reversal: the gw.error.authentication 401 is a vehicle/account
         # authz rejection, NOT a stale bearer → no refresh, no retry, None.
-        c = _client([_AUTH_401])
+        c = _client([_AUTH_401, _EUDP_404])
         oplist = asyncio.run(c._get_mbb_operationlist(VIN, for_command=True))
         assert oplist is None
         c._refresh_tokens.assert_not_awaited()           # never spends the budget
-        assert c._mbb_get.await_count == 1               # single call, no retry
+        # one legacy call, no retry; plus the single #1766 EU-DP attempt
+        assert c._mbb_get.await_count == 2
 
     def test_gw_error_authentication_never_storms(self) -> None:
         # Even called repeatedly (e.g. once per poll), it must never refresh —
         # that is exactly what used to trip the storm guard into a false
         # "please reauthenticate".
-        c = _client([_AUTH_401, _AUTH_401, _AUTH_401, _AUTH_401])
+        c = _client([_AUTH_401, _EUDP_404, _AUTH_401, _EUDP_404])
         for _ in range(4):
             assert asyncio.run(c._get_mbb_operationlist(VIN, for_command=True)) is None
         c._refresh_tokens.assert_not_awaited()
         # #909 — the denial is now negative-cached, so the follow-up polls do not
         # even reach the wire any more (it used to be one call per poll forever).
-        assert c._mbb_get.await_count == 1
+        # Two calls: the legacy host plus the #1766 EU-DP attempt, once.
+        assert c._mbb_get.await_count == 2
 
     def test_systemid_403_does_not_refresh(self) -> None:
         # The data-plane ACL is unrecoverable — must NOT refresh/retry.

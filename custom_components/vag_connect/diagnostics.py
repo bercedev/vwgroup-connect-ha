@@ -643,6 +643,8 @@ async def async_get_config_entry_diagnostics(
     # after the verdict was set. Union the parent with both sub-connectors so the
     # export reflects the real state regardless of which instance recorded it.
     _nl_union: set[str] = set()
+    # #1766 — VINs whose operationList came from the EU-DP host (read-only).
+    _eudp_union: set[str] = set()
     for _obj in (
         client,
         getattr(client, "_mbb_command", None) if client is not None else None,
@@ -656,6 +658,15 @@ async def async_get_config_entry_diagnostics(
         _s = getattr(_obj, "mbb_no_legacy_vins", None) if _obj is not None else None
         if _s:
             _nl_union.update(_s)
+        _e = getattr(_obj, "mbb_eudp_oplist_vins", None) if _obj is not None else None
+        if _e:
+            _eudp_union.update(_e)
+    mbb_eudp_oplist: list[str] = []
+    if _eudp_union:
+        try:
+            mbb_eudp_oplist = sorted(mask_vin(v) for v in _eudp_union)
+        except Exception:  # noqa: BLE001
+            mbb_eudp_oplist = []
     if _nl_union:
         try:
             mbb_no_legacy = sorted(mask_vin(v) for v in _nl_union)
@@ -699,6 +710,7 @@ async def async_get_config_entry_diagnostics(
         "parser_stats": parser_stats_diag,
         "capabilities": capabilities,
         "mbb_no_legacy": mbb_no_legacy,
+        "mbb_eudp_oplist": mbb_eudp_oplist,
         "mbb_eligibility": mbb_elig,
     }
 
@@ -744,6 +756,9 @@ async def async_get_device_diagnostics(
         ),
         "mbb_no_legacy": (
             [masked] if masked in full.get("mbb_no_legacy", []) else []
+        ),
+        "mbb_eudp_oplist": (
+            [masked] if masked in full.get("mbb_eudp_oplist", []) else []
         ),
         # v4.7.9 (#584/#923) — the cohort probe outcomes carry no VIN dimension
         # (status codes keyed by host/brand/country) and are the one datapoint a

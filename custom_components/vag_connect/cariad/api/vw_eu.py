@@ -2134,6 +2134,10 @@ class VWEUClient(CariadBaseClient):
             # #584-class report is triageable at a glance instead of asking
             # for a debug log.
             self.mbb_no_legacy_vins: set[str] = set()
+        if not hasattr(self, "mbb_eudp_oplist_vins"):
+            # #1766 — VINs whose operationList came from the EU-DP host after
+            # the legacy host refused it. Read-only: commands stay off for them.
+            self.mbb_eudp_oplist_vins: set[str] = set()
         now = datetime.now(tz=timezone.utc)
         cached = self._mbb_oplist_cache.get(vin)
         if not force_refresh and cached and cached[1] > now:
@@ -2174,6 +2178,18 @@ class VWEUClient(CariadBaseClient):
             # So: log once, spend no refresh, return None (caller treats None as
             # "unknown" and does not block reads).
             if err.status == 401 and "gw.error.authentication" in body:
+                # #1766 — the legacy host refuses this car, but on an enrolled
+                # MBB_ODP car the same operationList answers on the EU-DP host.
+                # Ask there before recording the no-legacy verdict.
+                eudp = await self._get_mbb_operationlist_eudp(
+                    vin, for_command=for_command
+                )
+                if eudp is not None:
+                    self._mbb_oplist_denied.pop(vin, None)
+                    self.mbb_no_legacy_vins.discard(vin)
+                    self.mbb_eudp_oplist_vins.add(vin)
+                    self._mbb_oplist_cache[vin] = (eudp, now + timedelta(hours=12))
+                    return eudp
                 # #909 — remember the denial so the next polls skip the call
                 # entirely, and say it out loud only ONCE per vehicle: the
                 # verdict never changes, so repeating the full explanation every
@@ -2245,6 +2261,7 @@ class VWEUClient(CariadBaseClient):
             # became primary user in the app), so drop the negative cache.
             self._mbb_oplist_denied.pop(vin, None)
             self.mbb_no_legacy_vins.discard(vin)  # #584 — enrolment recovered
+            self.mbb_eudp_oplist_vins.discard(vin)  # #1766 — legacy host is back
             self._mbb_oplist_cache[vin] = (oplist, now + timedelta(hours=12))
             enabled = [s for s in oplist.services.values() if s.enabled]
             _LOGGER.info(
@@ -2252,6 +2269,71 @@ class VWEUClient(CariadBaseClient):
                 "enabled", vin[-6:], oplist.role, oplist.status,
                 len(enabled), len(oplist.services),
             )
+        return oplist
+
+    async def _get_mbb_operationlist_eudp(
+        self, vin: str, *, for_command: bool = False,
+    ) -> "MbbOperationList | None":
+        """#1766 — the operationList from ``MBB_EUDP_SETTER_BASE``, or None.
+
+        Only called after the legacy host answered ``401
+        gw.error.authentication``. Accepted only when the body parses into a
+        list with at least one service: an empty envelope or an error body
+        must not clear the no-legacy verdict. Read-only, never raises.
+        """
+        from .._mbb import (  # noqa: PLC0415
+            MBB_EUDP_SETTER_BASE,
+            build_mbb_operationlist_url,
+            mbb_service_base,
+            parse_mbb_operationlist,
+        )
+
+        url = build_mbb_operationlist_url(MBB_EUDP_SETTER_BASE, vin)
+        try:
+            resp = await self._mbb_get(
+                url, _retry=False, for_command=for_command
+            )
+        except APIError as err:
+            _LOGGER.debug(
+                "MBB operationList ***%s on the EU-DP host → HTTP %s",
+                vin[-6:], err.status,
+            )
+            return None
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.debug(
+                "MBB operationList ***%s on the EU-DP host failed: %s",
+                vin[-6:], type(err).__name__,
+            )
+            return None
+        oplist = parse_mbb_operationlist(resp, vin)
+        if oplist is None or not oplist.services:
+            _LOGGER.debug(
+                "MBB operationList ***%s on the EU-DP host: no usable list",
+                vin[-6:],
+            )
+            return None
+        enabled = [s for s in oplist.services.values() if s.enabled]
+        _LOGGER.info(
+            "MBB operationList ***%s: legacy host refused, EU-DP host answered "
+            "(role=%s status=%s, %d/%d services enabled). Read-only: MBB "
+            "commands stay hidden for this car.", vin[-6:], oplist.role,
+            oplist.status, len(enabled), len(oplist.services),
+        )
+        # #1766 — log the host each service's own invocationUrl points at, so a
+        # read that would go to the wrong host is visible instead of silent.
+        try:
+            country = self._mbb_country()
+            hosts: dict[str, str | None] = {}
+            for sid in sorted(oplist.services):
+                base = mbb_service_base(
+                    oplist, sid, brand=self._brand.name, country=country, vin=vin,
+                )
+                hosts[sid] = base.split("//")[-1].split("/")[0] if base else None
+            _LOGGER.debug(
+                "MBB operationList ***%s: host per service: %s", vin[-6:], hosts,
+            )
+        except Exception:  # noqa: BLE001 — logging only, never blocks the list
+            pass
         return oplist
 
     async def _probe_fetched_role_cohort(self, vin: str) -> None:
@@ -2709,6 +2791,14 @@ class VWEUClient(CariadBaseClient):
         spec = MBB_COMMANDS.get(command_name)
         if spec is None:
             raise VehicleCommandError(command_name, "unknown MBB command")
+        if vin in getattr(self, "mbb_eudp_oplist_vins", ()):
+            # #1766 — the EU-DP list is used for reads only. The S-PIN legs have
+            # never been checked against that host, and wrong S-PIN attempts
+            # lock the vehicle PIN, so refuse before anything is sent.
+            raise VehicleCommandError(
+                command_name,
+                "MBB commands are not available for this car yet (its service "
+                "list comes from the EU-DP host, which is read-only for now)")
         pin = spin or self._spin
         if not pin:
             raise SpinError(f"S-PIN required for MBB {command_name}")

@@ -572,6 +572,10 @@ def _mbb_command_capability(
     # data-read plane is closed) and is deliberately never added to the set.
     if vin in getattr(cmd, "mbb_no_legacy_vins", ()):
         return False
+    # #1766 — the operationList came from the EU-DP host after the legacy host
+    # refused it. That list is used for reads only; commands stay hidden.
+    if vin in getattr(cmd, "mbb_eudp_oplist_vins", ()):
+        return False
     if command_id not in _MBB_COMMAND_SERVICE:
         # A command we don't route via MBB — leave it to the BFF gate rather
         # than risk hiding a legitimate non-MBB control.

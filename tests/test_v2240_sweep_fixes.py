@@ -321,7 +321,8 @@ def test_909_denied_oplist_is_not_requested_again() -> None:
     assert asyncio.run(client._get_mbb_operationlist(vin)) is None
     assert asyncio.run(client._get_mbb_operationlist(vin)) is None
     assert asyncio.run(client._get_mbb_operationlist(vin)) is None
-    assert client._mbb_get.await_count == 1
+    # legacy host + the #1766 EU-DP attempt (also denied), then nothing more
+    assert client._mbb_get.await_count == 2
 
 
 def test_909_denial_is_per_vin() -> None:
@@ -329,7 +330,7 @@ def test_909_denial_is_per_vin() -> None:
     client._mbb_get = _denied_get()
     assert asyncio.run(client._get_mbb_operationlist("VIN_A")) is None
     assert asyncio.run(client._get_mbb_operationlist("VIN_B")) is None
-    assert client._mbb_get.await_count == 2
+    assert client._mbb_get.await_count == 4  # legacy + EU-DP (#1766) per VIN
 
 
 def test_909_force_refresh_bypasses_the_denial() -> None:
@@ -338,7 +339,7 @@ def test_909_force_refresh_bypasses_the_denial() -> None:
     client._mbb_get = _denied_get()
     asyncio.run(client._get_mbb_operationlist("VIN_A"))
     asyncio.run(client._get_mbb_operationlist("VIN_A", force_refresh=True))
-    assert client._mbb_get.await_count == 2
+    assert client._mbb_get.await_count == 4  # legacy + EU-DP (#1766) per fetch
 
 
 def test_909_denial_logged_once_at_warning_then_debug(caplog) -> None:

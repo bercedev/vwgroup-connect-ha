@@ -29,6 +29,10 @@ _ACL_403 = APIError(
     '{"error":{"errorCode":"mbbc.rolesandrights.unauthorized",'
     '"description":"Did not find permission for systemId \'XID_APP_VW\'"}}',
 )
+# #1766 — the EU-DP host is asked after the verdict-bearing 401; 404 = no list.
+_EUDP_404 = APIError(
+    404, "https://mal-3a.prd.eu.dp.vwg-connect.com/api/rolesrights/operationlist/v3", "",
+)
 _GOOD = {"operationList": {"vin": VIN, "role": "PRIMARY_USER", "status": "ENABLED",
                            "serviceInfo": [{"serviceId": "rclima_v1",
                                             "serviceStatus": {"status": "Enabled"}}]}}
@@ -50,7 +54,7 @@ def test_gw_error_authentication_records_no_legacy_verdict() -> None:
 def test_successful_operationlist_clears_the_verdict() -> None:
     """Enrolment recovered (e.g. the user became primary user in the app) → a
     fresh list succeeds and the durable verdict drops."""
-    c = _client([_AUTH_401, _GOOD])
+    c = _client([_AUTH_401, _EUDP_404, _GOOD])
     asyncio.run(c._get_mbb_operationlist(VIN, for_command=True))
     assert VIN in c.mbb_no_legacy_vins
     ol = asyncio.run(

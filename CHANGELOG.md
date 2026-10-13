@@ -79,7 +79,18 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   @placidcasual98, who ran every test asked of him and whose negative results are what pinned
   this down (#1403).
 
+### Geändert / Changed
+
+- **Some cars that the legacy MBB host turns away now get their service list from the EU-DP
+  host.** When the legacy host answers `401 gw.error.authentication`, the operationList is now
+  requested once from the EU-DP host before the car is marked "no legacy". That list is used
+  only if it parses and contains services; an empty or error body records the verdict exactly
+  as before. Read-only: commands stay hidden for these cars and are refused before any S-PIN
+  step, because the S-PIN host has not been checked yet. Diagnostics show such cars under
+  `mbb_eudp_oplist`, and the debug log names the host each service points to (#1766).
+
 ### Behoben / Fixed
+
 - **Your tyre pressures show their decimal again.** The portal sends a value like 2.8 bar, and
   every tyre-pressure sensor was showing 2. The number was being read as a whole number and the
   fraction thrown away, on all four corners and the spare, in the actual, the target and the
