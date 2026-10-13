@@ -62,6 +62,14 @@ _FIXABLE_REASONS: dict[str, str] = {
     "email_two_factor_required": "reauth",
     "terms_and_conditions":  "reauth",
     "marketing_consent":     "reauth",
+    # #1813 — both notices told the user to go and do something, while the
+    # notice itself offered nothing to click, because neither reason was in
+    # here. They differ in WHERE the user has to end up: reauth is where the
+    # code sign-in lives, and it is the dead end for a retired grant, so that
+    # one goes to reconfigure, which takes email + password and merges them
+    # onto the existing entry.
+    "device_login_expired":  "reauth",
+    "device_login_grant_retired": "reconfigure",
 }
 
 # v1.19.4 Bundle 1 — Brand-aware deeplinks für T&C-Repair-Issue.
@@ -122,6 +130,13 @@ def raise_issue_auth_required(
         "device_login_expired": (
             ir.IssueSeverity.ERROR,
             "device_login_expired",
+        ),
+        # #1813 follow-up — same entry shape, but on a brand whose app
+        # device-code client was retired, so the QR step above is a dead end
+        # and the way back in is reconfigure with email + password.
+        "device_login_grant_retired": (
+            ir.IssueSeverity.ERROR,
+            "device_login_grant_retired",
         ),
         "terms_and_conditions": (
             ir.IssueSeverity.ERROR,
@@ -186,7 +201,8 @@ def clear_auth_issues(hass: HomeAssistant, entry_id: str) -> None:
                    "terms_and_conditions",
                    "marketing_consent", "too_many_requests",
                    "invalid_credentials", "auth_failed",
-                   "device_login_expired", "portal_interaction_required"]:
+                   "device_login_expired", "device_login_grant_retired",
+                   "portal_interaction_required"]:
         ir.async_delete_issue(hass, DOMAIN, f"{entry_id}_{reason}")
 
 

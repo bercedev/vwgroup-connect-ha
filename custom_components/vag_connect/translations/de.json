@@ -2638,6 +2638,10 @@
     "device_login_expired": {
       "title": "Neu anmelden, um {brand} wiederherzustellen",
       "description": "Die Anmelde-Sitzung dieses Eintrags ist abgelaufen und konnte sich nicht von selbst erneuern.\n\nDieser Eintrag wurde per Anmelde-Code eingerichtet, es sind also keine Zugangsdaten gespeichert, mit denen ein neuer Versuch möglich wäre, und es gibt nichts zu korrigieren. Wähle bei der Integration **Neu authentifizieren** und scanne den Code erneut; die Fahrzeugdaten kommen zurück, sobald die neue Sitzung steht.\n\nBis dahin bleiben die Entitäten nicht verfügbar. Es ist kein Passwort-Problem und du hast nichts falsch gemacht."
+    },
+    "device_login_grant_retired": {
+      "title": "{brand} mit E-Mail und Passwort wiederherstellen",
+      "description": "Die Anmelde-Sitzung dieses Eintrags ist abgelaufen und lässt sich nicht erneuern.\n\nDieser Eintrag wurde über die Code-Anmeldung eingerichtet, und dieser Weg ist zu: Der Hersteller hat die App-Anmeldung dieser Marke abgeschaltet, ein neuer Code kann also nicht mehr angefordert werden. Das ist kein Passwort-Problem und du hast nichts falsch gemacht.\n\nWähle **Reparieren** und melde dich mit E-Mail und Passwort an. Der Eintrag behält seine Historie, seine Einstellungen und seine Entitätsnamen, es muss also nichts gelöscht und neu angelegt werden.\n\nBis dahin bleiben die Entitäten nicht verfügbar."
     }
   },
   "selector": {

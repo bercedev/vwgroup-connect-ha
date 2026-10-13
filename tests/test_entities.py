@@ -683,7 +683,10 @@ class TestRepairs:
         # raisable reason without a matching clear fail loudly, which is exactly
         # how it caught this change. The rule behind the number is asserted in
         # tests/test_1813_passwordless_entry_reauth.py.
-        assert mock_del.call_count == 9
+        # #1813 follow-up — ``device_login_grant_retired`` → 10. The tripwire
+        # fired again on exactly the change it exists for, which is the reason
+        # to keep updating the number rather than deriving it from the list.
+        assert mock_del.call_count == 10
 
     def test_unknown_reason_uses_auth_failed(self):
         from custom_components.vag_connect.repairs import raise_issue_auth_required
