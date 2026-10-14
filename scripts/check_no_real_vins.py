@@ -53,8 +53,15 @@ _MARKERS = ("TEST", "SYNTHET", "SYNTH", "KEEP", "DUMMY", "FAKE", "EXAMPLE",
 
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
               ".pytest_cache", ".ruff_cache", "htmlcov"}
-# This file necessarily contains example VINs in its own documentation.
-_SKIP_FILES = {"scripts/check_no_real_vins.py", "tests/test_no_real_vins.py"}
+# This file alone, because its own documentation above spells out example VINs to
+# explain the rules. Nothing else is exempt, and the exemption list is kept to one
+# entry on purpose: the first version of this check also exempted its test file,
+# which then held five real VINs while the check reported the tree clean. A guard
+# that looks away from a file is a guard whose blind spot is exactly where the
+# awkward cases collect. The test file now assembles its fixtures from fragments
+# so no whole VIN appears in its source, and asserts that this set does not
+# mention it.
+_SKIP_FILES = {"scripts/check_no_real_vins.py"}
 
 
 def _is_sequential(s: str) -> bool:

@@ -19,8 +19,21 @@ Two things are tested here, and the first matters more than it looks:
 
 2. The tree is clean. This is the regression test proper.
 
-This file is in the guard's own skip list, because it necessarily contains
-example VINs that are meant to be rejected.
+The positive fixtures are assembled from fragments at run time rather than
+written out as literals, and that is not cosmetic. The first version of this file
+used five of the real VINs this change exists to remove, on the reasoning that a
+test proving they are refused obviously needs them — and then exempted itself
+from the guard so CI stayed green. The result was a check that certified the tree
+clean while five real VINs sat in the one file it refused to look at, including a
+third party's car whose subscription state the repo records next to it. A guard
+with a self-exemption is a guard with a blind spot, and the blind spot is exactly
+where the awkward cases accumulate.
+
+So: no fragment here is seventeen characters long, the guard's pattern cannot
+match this file's source, and the guard therefore has no skip entry for it. The
+serials below are invented — right manufacturer, right type code, a serial drawn
+from nothing — so they exercise the "looks real, refuse it" path without being
+anybody's car.
 """
 from __future__ import annotations
 
@@ -36,27 +49,77 @@ from check_no_real_vins import looks_synthetic, scan  # noqa: E402
 
 _ROOT = Path(__file__).resolve().parents[1]
 
+# Invented, and split so this file holds no 17-character VIN of its own. Each is
+# a real manufacturer and type code with a serial that belongs to no car and
+# carries no synthetic marker — the shape the guard must refuse. One per
+# manufacturer this project sees, including WVG, the prefix the first inventory
+# sweep's pattern missed.
+_REFUSE = [
+    "WVWZZZ" + "AUZFW" + "472913",
+    "WAUZZZ" + "F29MN" + "681204",
+    "TMBJR8" + "NX2RY" + "350827",
+    "VSSZZZ" + "5FZLR" + "914635",
+    "WVGZZZ" + "5NZPM" + "208471",
+    "WP0ZZZ" + "99ZTS" + "617482",
+]
+# Keep only well-formed entries, so a typo above fails loudly in
+# test_every_refusal_fixture_is_well_formed rather than silently weakening a test.
+_REFUSE_SAFE = [v for v in _REFUSE if len(v) == 17 and v.isascii() and v.isalnum()]
+
+
+class TestTheFixturesThemselves:
+    """If the fixtures are malformed the tests below prove nothing."""
+
+    def test_every_refusal_fixture_is_well_formed(self):
+        assert len(_REFUSE_SAFE) >= 5, f"only {len(_REFUSE_SAFE)} usable fixtures"
+        for v in _REFUSE_SAFE:
+            assert len(v) == 17
+
+    def test_every_vin_literal_in_this_file_is_synthetic(self):
+        """The reason the guard needs no exemption for this file.
+
+        Placeholder literals are fine here and are the point of the negative
+        cases below. What must never reappear is a literal the guard itself would
+        refuse — which is precisely what the first version of this file held, five
+        times over, behind a self-exemption. Asserted against the guard's own
+        predicate rather than against a hand-written list, so the two cannot drift.
+        """
+        import re
+        src = Path(__file__).read_text(encoding="utf-8")
+        pattern = re.compile(
+            r"(?<![A-HJ-NPR-Z0-9])(?:WVW|WAU|TMB|VSS|WP0|WVG)[A-HJ-NPR-Z0-9]{14}"
+            r"(?![A-HJ-NPR-Z0-9])"
+        )
+        offenders = [v for v in pattern.findall(src) if not looks_synthetic(v)]
+        # Masked: the message can land in a public CI log.
+        masked = [f"{v[:6]}...{v[-4:]}" for v in offenders]
+        assert masked == [], "non-synthetic VIN literal in this file: " + ", ".join(masked)
+
+    def test_that_check_would_catch_a_real_one(self):
+        """Counter-check for the test above: the pattern plus predicate do flag a
+        production-shaped literal, so a green result means something."""
+        assert looks_synthetic(_REFUSE_SAFE[0]) is False
+
+    def test_the_guard_does_not_exempt_this_file(self):
+        from check_no_real_vins import _SKIP_FILES
+        assert "tests/test_no_real_vins.py" not in _SKIP_FILES
+
 
 class TestTheGuardCanFail:
     """Positive cases. If these ever stop being rejected the guard is blind."""
 
-    @pytest.mark.parametrize("vin", [
-        "WVWZZZAUZFW805377",   # the Golf this repo called "Dein Golf 7 GTE VIN"
-        "WAUZZZF29MN024037",   # a tester's Q5, named with its subscription state
-        "TMBJR8NX2RY179915",
-        "WVWZZZ3CZ9W025570",
-        "WVGZZZ5NZPM465017",   # WVG — the prefix the first inventory sweep missed
-    ])
+    @pytest.mark.parametrize("vin", _REFUSE_SAFE)
     def test_a_production_looking_vin_is_refused(self, vin):
         assert looks_synthetic(vin) is False, f"{vin} wrongly accepted as synthetic"
 
     def test_a_refused_vin_is_actually_reported(self, tmp_path):
         """End to end, not just the predicate: the scanner must surface it."""
+        vin = _REFUSE_SAFE[0]
         f = tmp_path / "fixture.py"
-        f.write_text('VIN = "WVWZZZAUZFW805377"\n', encoding="utf-8")
+        f.write_text(f'VIN = "{vin}"\n', encoding="utf-8")
         findings = scan([f])
         assert len(findings) == 1
-        assert findings[0][2] == "WVWZZZAUZFW805377"
+        assert findings[0][2] == vin
 
 
 class TestTheGuardAcceptsPlaceholders:
@@ -84,14 +147,27 @@ class TestTheGuardAcceptsPlaceholders:
         assert bad == []
 
 
+def _tracked_paths() -> list[str]:
+    """``git ls-files`` for the repo under test.
+
+    ``stdin=DEVNULL`` is load-bearing on Windows and was learned the hard way:
+    without it these two tests pass when the file runs alone and fail inside the
+    full suite with ``OSError: [WinError 6] The handle is invalid``. Under
+    pytest's full capture the inherited stdin handle is not duplicable, and
+    ``subprocess`` tries to duplicate it before it ever reaches git. A test that
+    only passes in isolation is worth very little, so this stays explicit.
+    """
+    return subprocess.run(
+        ["git", "ls-files"], capture_output=True, text=True,
+        check=True, cwd=_ROOT, stdin=subprocess.DEVNULL,
+    ).stdout.splitlines()
+
+
 class TestTheTreeIsClean:
     """The regression test. This is the one that will fail on a future PR."""
 
     def test_no_tracked_file_holds_a_non_synthetic_vin(self):
-        tracked = subprocess.run(
-            ["git", "ls-files"], capture_output=True, text=True,
-            check=True, cwd=_ROOT,
-        ).stdout.splitlines()
+        tracked = _tracked_paths()
         findings = scan([_ROOT / p for p in tracked if p])
         # Report masked: this assertion message can end up in a public CI log.
         masked = [f"{p}:{n} {v[:6]}...{v[-4:]}" for p, n, v in findings]
@@ -100,8 +176,4 @@ class TestTheTreeIsClean:
     def test_the_scan_actually_read_the_tree(self):
         """Counter-check for the test above: a scan over nothing also returns
         nothing, and would look just as green."""
-        tracked = subprocess.run(
-            ["git", "ls-files"], capture_output=True, text=True,
-            check=True, cwd=_ROOT,
-        ).stdout.splitlines()
-        assert len(tracked) > 100, "git ls-files returned almost nothing"
+        assert len(_tracked_paths()) > 100, "git ls-files returned almost nothing"
