@@ -410,11 +410,26 @@ def _merge_drivetrain(
         setattr(merged, name, value)
 
 
+def _record(sink: dict[str, str] | None, channel: str, label: str) -> None:
+    """Write a PII-free per-channel outcome into the diagnostics sink.
+
+    Mirrors how this project already surfaces this class of thing (see the
+    coordinator's ``_skoda_probe``): a short label under a stable key, no-op when
+    there is no sink, so every existing caller is unaffected. Namespaced
+    ``channel:`` because ``probe_outcomes`` otherwise holds per-READ entries, and
+    the distinction between "this read walled" and "this whole channel dropped
+    out" is the one #1827 needed and could not make.
+    """
+    if sink is not None:
+        sink[f"channel:{channel}"] = label
+
+
 async def gather_and_merge(
     primary_name: str,
     primary: "VehicleData",
     suppliers: list[tuple[str, Awaitable["VehicleData | None"]]],
     preferred: str | None = None,
+    outcomes: dict[str, str] | None = None,
 ) -> "VehicleData":
     """Read supplementary channels concurrently and merge them onto ``primary``.
 
@@ -437,11 +452,27 @@ async def gather_and_merge(
     sources: list[tuple[str, "VehicleData"]] = [(primary_name, primary)]
     for (name, _awaitable), res in zip(suppliers, results):
         if isinstance(res, BaseException):
+            # #1827 — the skip itself used to be DEBUG-only, and that made a real
+            # report undecidable: a stale batch value and a skipped live channel
+            # produce the same download, because when every supplier is skipped
+            # the ``len(sources) == 1`` return below hands back the primary and
+            # the live-supersede rule never runs. Record it so the next person to
+            # hit this answers the question by attaching a file instead of being
+            # asked to turn on debug logging first (the #1712 lesson).
+            #
+            # TYPE only, never str(res): a message on this path can carry the
+            # request URL, and on the authproxy path that URL has carried tokens.
+            _record(outcomes, name, f"failed:{type(res).__name__}")
             _LOGGER.debug("supplementary channel %s failed, skipped: %s",
                           name, type(res).__name__)
             continue
-        if res is not None:
-            sources.append((name, res))
+        if res is None:
+            # Distinct from a failure on purpose: "ran and had nothing" and "fell
+            # over" are exactly the two cases #1827 could not tell apart.
+            _record(outcomes, name, "no_data")
+            continue
+        _record(outcomes, name, "ok")
+        sources.append((name, res))
     if len(sources) == 1:
         return primary
     # #1357 — per-VIN read priority. The per-field winner is the ORDER of this

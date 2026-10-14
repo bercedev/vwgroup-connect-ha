@@ -4160,6 +4160,11 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             merged = await gather_and_merge(
                 self._primary_channel_name(), primary, suppliers,
                 preferred=self._read_priority_channel(vin),
+                # #1827 — hand the client's probe sink along so a supplementary
+                # channel dropping out shows up in the diagnostics instead of
+                # only in a DEBUG line. Same sink the per-read outcomes use, so
+                # the download gains ``channel:<name>`` entries beside them.
+                outcomes=getattr(self._cariad_client, "probe_outcomes", None),
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(

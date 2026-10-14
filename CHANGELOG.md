@@ -196,6 +196,19 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Behoben / Fixed
 
+- **The diagnostics now say when one of the extra read channels dropped out.** If the
+  `volkswagen.de` channel or the EU Data Act portal fails during a poll, the integration keeps
+  going on the others, which is right. Until now it kept going silently: the skip was written
+  only to a debug log, so a downloaded diagnostics file could not tell you whether a channel had
+  fallen over or had simply found nothing that round. Those two look identical from the outside
+  and have different causes, and the download now distinguishes them per channel.
+
+  This matters beyond tidiness. When every extra channel drops out, the rule that stops an older
+  batch reading from outranking a live one has nothing to compare and does not run — so a value
+  can look stale for a reason that was, until now, invisible in the file. If you report an
+  unexpected reading, the answer should be in the diagnostics you attach rather than cost you a
+  round of "please switch on debug logging first".
+
 - **A car whose service list comes from the read-only host keeps its remote commands blocked
   even right after a restart.** That block was already there and already correct, but it was
   checked a moment too early: the integration looked at its own note of which cars are affected
