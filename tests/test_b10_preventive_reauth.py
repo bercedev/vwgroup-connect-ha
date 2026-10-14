@@ -67,9 +67,50 @@ def test_notification_omits_fallback_when_no_distinct_plain_url() -> None:
     assert "by hand" not in pn.call_args.args[1]
 
 
-# ── P2b — passwordless reauth routes to QR, not the credential form ──────────
+# ── P2b — passwordless reauth routes to QR, where the QR still works ─────────
+#
+# #1813 — this used to assert the routing for an Audi device_grant entry, which
+# was right when it was written (b10, #845/#835) and is wrong now: VW retired
+# that brand's app device-code client in #1364, so the hand-off lands on the
+# device_grant_retired banner. The gate consults qr_signin_live, so the test now
+# covers both sides of it — a live pair still hands off, a retired one gets the
+# credential form with the email field added.
 
-def test_reauth_confirm_routes_passwordless_entry_to_qr() -> None:
+def test_reauth_confirm_routes_a_live_passwordless_entry_to_qr() -> None:
+    flow = _flow()
+    flow.hass.config_entries.async_get_entry = MagicMock(
+        return_value=_entry({
+            CONF_BRAND: "cupra",   # live app device-code client
+            "dag_initial_tokens": {"strategy": "device_grant"},
+            CONF_PASSWORD: "",
+        })
+    )
+    flow.async_step_reauth_qr = AsyncMock(return_value={"type": "sentinel"})
+    result = asyncio.run(flow.async_step_reauth_confirm(None))
+    flow.async_step_reauth_qr.assert_awaited_once()
+    assert result == {"type": "sentinel"}
+
+
+def test_reauth_confirm_routes_a_durable_mbb_entry_to_qr() -> None:
+    """The other live pair, so the gate is not read as 'only cupra and seat'."""
+    flow = _flow()
+    flow.hass.config_entries.async_get_entry = MagicMock(
+        return_value=_entry({
+            CONF_BRAND: "volkswagen",
+            "dag_initial_tokens": {"strategy": "mbb"},
+            CONF_PASSWORD: "",
+        })
+    )
+    flow.async_step_reauth_qr = AsyncMock(return_value={"type": "sentinel"})
+    result = asyncio.run(flow.async_step_reauth_confirm(None))
+    flow.async_step_reauth_qr.assert_awaited_once()
+    assert result == {"type": "sentinel"}
+
+
+def test_reauth_confirm_does_not_route_a_retired_grant_to_qr() -> None:
+    """The case @ratclma hit: the hand-off would land on the retirement banner,
+    and Home Assistant opens this flow by itself, so the dead end would be
+    reachable without him clicking anything."""
     flow = _flow()
     flow.hass.config_entries.async_get_entry = MagicMock(
         return_value=_entry({
@@ -78,9 +119,42 @@ def test_reauth_confirm_routes_passwordless_entry_to_qr() -> None:
             CONF_PASSWORD: "",
         })
     )
+    flow.async_step_reauth_qr = AsyncMock()
+    result = asyncio.run(flow.async_step_reauth_confirm(None))
+    flow.async_step_reauth_qr.assert_not_awaited()
+    assert result["type"] == "form"
+
+
+def test_the_retired_grant_form_asks_for_the_email_too() -> None:
+    """A password-only form cannot fix these entries: the stored username is the
+    BrandID `sub`, not an address."""
+    flow = _flow()
+    flow.hass.config_entries.async_get_entry = MagicMock(
+        return_value=_entry({
+            CONF_BRAND: "audi",
+            "dag_initial_tokens": {"strategy": "device_grant"},
+            CONF_PASSWORD: "",
+        })
+    )
+    flow.async_step_reauth_qr = AsyncMock()
+    result = asyncio.run(flow.async_step_reauth_confirm(None))
+    keys = {str(k) for k in result["data_schema"].schema}
+    assert any("username" in k for k in keys), keys
+
+
+def test_the_live_grant_form_is_not_reached_so_asks_nothing() -> None:
+    """Counter-check for the test above: it is the retired branch that adds the
+    field, not every reauth form. A live pair never reaches the form at all."""
+    flow = _flow()
+    flow.hass.config_entries.async_get_entry = MagicMock(
+        return_value=_entry({
+            CONF_BRAND: "cupra",
+            "dag_initial_tokens": {"strategy": "device_grant"},
+            CONF_PASSWORD: "",
+        })
+    )
     flow.async_step_reauth_qr = AsyncMock(return_value={"type": "sentinel"})
     result = asyncio.run(flow.async_step_reauth_confirm(None))
-    flow.async_step_reauth_qr.assert_awaited_once()
     assert result == {"type": "sentinel"}
 
 

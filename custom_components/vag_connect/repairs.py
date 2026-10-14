@@ -64,12 +64,20 @@ _FIXABLE_REASONS: dict[str, str] = {
     "marketing_consent":     "reauth",
     # #1813 — both notices told the user to go and do something, while the
     # notice itself offered nothing to click, because neither reason was in
-    # here. They differ in WHERE the user has to end up: reauth is where the
-    # code sign-in lives, and it is the dead end for a retired grant, so that
-    # one goes to reconfigure, which takes email + password and merges them
-    # onto the existing entry.
+    # here. Both now open reauth, and both end up in the right place, because
+    # the routing inside reauth consults qr_signin_live: where the code sign-in
+    # is alive it hands off to it, and where it is retired it shows the
+    # credential form with the email field added.
+    #
+    # Reconfigure was the first choice here and was wrong. On these entries the
+    # unique id is f"{brand}_{dag_user_id}", so a reconfigure that takes an email
+    # always computes a different unique id, takes the account_changed branch and
+    # does a CLEAN REBUILD of entry.data — dropping the MBB command channel, the
+    # supplementary portal credentials and the cohort flag — and can abort
+    # already_configured for anyone who already made a second entry. Reauth
+    # updates with {**reauth_entry.data, ...} and leaves the unique id alone.
     "device_login_expired":  "reauth",
-    "device_login_grant_retired": "reconfigure",
+    "device_login_grant_retired": "reauth",
 }
 
 # v1.19.4 Bundle 1 — Brand-aware deeplinks für T&C-Repair-Issue.

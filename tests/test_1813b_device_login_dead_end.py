@@ -44,9 +44,15 @@ Two further defects in the same notice, both found while grounding the above:
   call passes it.
 - There is no Repair button at all: the reason is absent from
   ``_FIXABLE_REASONS``, so a notice whose text says "choose Reauthenticate"
-  offers nothing to click. Both reasons get a button here, each pointed at the
-  flow that can actually finish: reauth where the code sign-in lives, reconfigure
-  where it does not.
+  offers nothing to click. Both reasons get a button here.
+
+Where that button leads changed after this file was written, and the reasoning is
+in ``test_1813c_reauth_routes_past_dead_grant.py``. In short: Home Assistant opens
+the reauth flow itself on a ``ConfigEntryAuthFailed``, so pointing the repair
+somewhere else left the dead end reachable without the user clicking anything;
+and reconfigure, the first destination chosen here, does a clean rebuild of
+``entry.data`` on exactly these entries. So both reasons open reauth now, and the
+routing gate inside it tells them apart.
 """
 from __future__ import annotations
 
@@ -168,9 +174,14 @@ class TestTheRepairWiring:
         src = inspect.getsource(repairs.clear_auth_issues)
         assert f'"{reason}"' in src
 
-    def test_the_dead_reason_opens_reconfigure_not_reauth(self):
+    def test_the_dead_reason_also_opens_reauth(self):
+        """Superseded destination. This pointed at reconfigure until a review of
+        the branch showed reconfigure does a clean rebuild of entry.data on
+        exactly these entries, and that HA opens reauth by itself anyway. The
+        routing inside reauth now decides, so both reasons land there and the
+        branch's own test_1813c pins the gate that tells them apart."""
         from custom_components.vag_connect.repairs import _FIXABLE_REASONS
-        assert _FIXABLE_REASONS[_DEAD] == "reconfigure"
+        assert _FIXABLE_REASONS[_DEAD] == "reauth"
 
     def test_the_live_reason_opens_reauth(self):
         from custom_components.vag_connect.repairs import _FIXABLE_REASONS
