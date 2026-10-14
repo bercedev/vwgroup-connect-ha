@@ -84,6 +84,18 @@ _REDACT_KEYS = frozenset({
     # as one PII unit for exactly this reason (their #477 was this leak class).
     # Redact it by key so it can't fall through regardless of the value form.
     "parking_city",
+    # The two map renders of the parking position (OLA parkingposition supplies
+    # them; the comment at their assignment calls them map URLs of the parking
+    # location). Same family as parking_address and parking_city above, and the
+    # only members of it that had no branch. Redacted by key, like the others,
+    # because the generic string branch is not shaped for this value form.
+    # Whether the URL encodes the position as numbers or as an opaque token is
+    # not established — every sample in our fixtures is a bare "https://..." —
+    # and redacting is the cheap side of that uncertainty. Pinned by
+    # tests/test_diagnostics_parking_map_url.py, which also records why the
+    # string branch does not cover it, so this entry is not removed as redundant.
+    "parking_map_url_dark",
+    "parking_map_url_light",
     "user_id",
     "account_id",
     # D#1231 — the volkswagen.de profile block is personal: the number plate

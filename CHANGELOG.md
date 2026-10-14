@@ -388,6 +388,11 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Sicherheit / Security
 
+- **The diagnostics download now redacts the parking-position map links too.** The two map
+  images of where the car is parked are masked in the downloaded diagnostics, the same as the
+  parking address, the city and the coordinates already were. Nothing about the integration's
+  behaviour changes and the sensors are unaffected; this is only about what ends up in a file
+  people attach to public issues.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.
