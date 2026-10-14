@@ -388,11 +388,25 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Sicherheit / Security
 
-- **The diagnostics download now redacts the parking-position map links too.** The two map
-  images of where the car is parked are masked in the downloaded diagnostics, the same as the
-  parking address, the city and the coordinates already were. Nothing about the integration's
-  behaviour changes and the sensors are unaffected; this is only about what ends up in a file
-  people attach to public issues.
+- **The diagnostics download masks two more things: your vehicle's nickname, and the
+  parking-position map links.** Both are about what ends up in a file people attach to public
+  issues; nothing about the integration's behaviour changes and no sensor is affected.
+
+  The nickname is the one that matters. A name you chose for your car was being written out in
+  full in the raw-payload section of the diagnostics, for anyone on the `volkswagen.de` channel.
+  Our own field name for it was masked and so was the short form some backends send, but the
+  spelling that actually arrives on the wire matched neither, and it is a free-text name, so
+  none of the pattern-based masking caught it either. It is masked now, in every spelling we
+  know of, including the different one used in North America. Thank you to @Fishermanjb, whose
+  report of a neighbouring problem is what led here.
+
+  The map links are the smaller half: the two map images of where the car is parked are masked
+  now, the same as the parking address, the city and the coordinates already were.
+
+  Two things from the same report were left alone on purpose. The model name and specifications
+  are noise rather than anything personal, so leaving them costs nothing but a few lines in the
+  file. And a blanket mask on anything called a URL would remove the payload shapes that make
+  the raw section useful for mapping a new field in the first place.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.

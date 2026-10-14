@@ -390,6 +390,17 @@ _RAW_REDACT_KEYS = frozenset({
     "gpscoordinates", "carcapturedgpscoordinates", "coordinates",
     "latitude", "longitude", "lat", "lng", "lon",
     "licenceplate", "licenseplate", "numberplate", "registrationnumber",
+    # #1828 — the bare "nickname" below does not cover the key the wire actually
+    # sends. vw.de, the authproxy relations read and SEAT/CUPRA send
+    # ``vehicleNickname``; VW North America sends ``vehicleNickName``. Both
+    # lowercase to this, so one entry covers them, and neither matched before:
+    # our own snake_case ``vehicle_nickname`` is in _REDACT_KEYS and the bare
+    # ``nickname`` is here, but the compound wire spelling was in neither set and
+    # no value regex catches a free-text name. The raw-payload section is not
+    # opt-in, so an owner-chosen nickname went out in cleartext in every vw.de
+    # diagnostics download — and it reached a public issue that way the same day
+    # this was found, sitting two lines below a correctly redacted licensePlate.
+    "vehiclenickname",
     "nickname", "firstname", "lastname", "givenname", "familyname", "fullname",
     "dateofbirth", "birthdate", "phone", "phonenumber", "mobile",
     "email", "emailaddress", "salutation",
