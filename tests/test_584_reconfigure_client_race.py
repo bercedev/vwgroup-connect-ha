@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock
 
 from custom_components.vag_connect.coordinator import VagConnectCoordinator
 
-VIN = "WVWZZZ3CZ9W025570"
+VIN = "WVWZZZ3CZ9W000000"
 
 
 def _coord(client) -> VagConnectCoordinator:

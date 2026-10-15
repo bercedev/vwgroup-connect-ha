@@ -74,6 +74,13 @@ jobs:
               sys.exit(1)
           "
 
+      # CONTRIBUTING.md forbids full VINs in the repo, fixtures and commits, and
+      # it binds maintainers as well as contributors. Runs here rather than only
+      # in a git hook, because .git/hooks is not committed and so does not
+      # protect a fork PR at all.
+      - name: Keine echten VINs im Repo
+        run: python3 scripts/check_no_real_vins.py
+
       - name: CHANGELOG.md enthält aktuelle Version
         run: |
           python3 -c "

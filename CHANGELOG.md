@@ -397,6 +397,7 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   - Existing entries keep their tokens.
 - **Diagnostics:** the add-on token, the agent token and the phone's host address are redacted.
 - **Screen dumps:** a dump that contains an XML DOCTYPE or ENTITY declaration is refused before it is parsed (gszigethy/vwgroup-connect-ha#57).
+- **Vehicle identification numbers:** CI refuses a VIN-shaped literal in the repository that carries no visible mark of being made up.
 
 
 ## [4.13.0] - 2026-10-10 — Six reporters' diagnostic readings, and two accounts that read the same car

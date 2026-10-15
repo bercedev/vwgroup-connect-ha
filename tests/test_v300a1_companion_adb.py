@@ -328,7 +328,7 @@ class TestCompanionClient:
         from custom_components.vag_connect.companion.channel import CompanionChannel
 
         c._brand = brand
-        c._vin = "WVWZZZAUZFW805377"
+        c._vin = "WVWZZZAUZFW000000"
         c._transport = transport
         c._channel = CompanionChannel(transport, PRESETS[brand], time_fn=time.monotonic)
         c.on_tokens_changed = None
@@ -341,7 +341,7 @@ class TestCompanionClient:
     async def test_get_status_maps_a_read_onto_vehicledata(self) -> None:
         t = _FakeTransport(version="4.2.1", dump=VW_SCREEN)
         c = self._client(t)
-        data = await c.get_status("WVWZZZAUZFW805377")
+        data = await c.get_status("WVWZZZAUZFW000000")
         assert data.battery_soc == 74
         assert data.electric_range_km == 312
         assert data.source_channel == "companion_adb"
@@ -351,14 +351,14 @@ class TestCompanionClient:
     async def test_empty_read_returns_no_data_not_a_raise(self) -> None:
         t = _FakeTransport(version="4.2.1", dump=_dump(""))
         c = self._client(t)
-        data = await c.get_status("WVWZZZAUZFW805377")
+        data = await c.get_status("WVWZZZAUZFW000000")
         assert data.no_data is True
 
     @pytest.mark.asyncio
     async def test_get_vehicles_returns_the_configured_vin(self) -> None:
         t = _FakeTransport(version="4.2.1", dump=VW_SCREEN)
         c = self._client(t)
-        assert await c.get_vehicles() == ["WVWZZZAUZFW805377"]
+        assert await c.get_vehicles() == ["WVWZZZAUZFW000000"]
 
     @pytest.mark.asyncio
     async def test_cooldown_poll_returns_last_data_not_no_data(self) -> None:
@@ -378,15 +378,15 @@ class TestCompanionClient:
 
         t = _Flaky(version="4.2.1", dump=VW_SCREEN)
         c = self._client(t)
-        first = await c.get_status("WVWZZZAUZFW805377")
+        first = await c.get_status("WVWZZZAUZFW000000")
         assert first.battery_soc == 74 and first.no_data is False
         # trip the cooldown, then poll again while it is active
         state["fail"] = True
         try:
-            await c.get_status("WVWZZZAUZFW805377")
+            await c.get_status("WVWZZZAUZFW000000")
         except CompanionTransportError:
             pass
-        during = await c.get_status("WVWZZZAUZFW805377")
+        during = await c.get_status("WVWZZZAUZFW000000")
         assert during is first, "cooldown poll should hand back the last snapshot"
         assert during.no_data is False
 
@@ -405,10 +405,10 @@ class TestCompanionClient:
         t = _DeadOnArrival(version="4.2.1", dump=VW_SCREEN)
         c = self._client(t)
         try:
-            await c.get_status("WVWZZZAUZFW805377")
+            await c.get_status("WVWZZZAUZFW000000")
         except CompanionTransportError:
             pass
-        data = await c.get_status("WVWZZZAUZFW805377")  # in cooldown, no history
+        data = await c.get_status("WVWZZZAUZFW000000")  # in cooldown, no history
         assert data.no_data is True
 
     @pytest.mark.asyncio
@@ -428,9 +428,9 @@ class TestCompanionClient:
 
         t = _FakeTransport(version="x", dump=VW_SCREEN)
         c = self._client(t, brand="audi")
-        await c.get_status("WVWZZZAUZFW805377")  # decide writes
+        await c.get_status("WVWZZZAUZFW000000")  # decide writes
         with pytest.raises(VehicleCommandError):
-            await c.command_start_climate("WVWZZZAUZFW805377")
+            await c.command_start_climate("WVWZZZAUZFW000000")
 
 
 # ── coordinator integration: B1 (spawn guard) + S1 (read-only) ──────────────

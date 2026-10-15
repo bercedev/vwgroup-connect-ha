@@ -176,12 +176,15 @@ def test_diagnostics_scrub_masks_vin_inside_render_url() -> None:
     out = _scrub({
         "render_url": (
             "https://x.blob.core.windows.net/widget-renders/"
-            "TMBJK0NX4MY109119.png?etag=0x8DEEC19E6798565"
+            "TMBJK0NX4MY000000.png?etag=0x8DEEC19E6798565"
         ),
-        "composite_render_urls": {"side": "https://x/WAUZZZ8T99A012765.png"},
+        "composite_render_urls": {"side": "https://x/WAUZZZ8T99A000000.png"},
     }, gps_round=False)
     blob = json.dumps(out)
-    assert "TMBJK0NX4MY109119" not in blob      # full VIN gone
-    assert "WAUZZZ8T99A012765" not in blob       # composite VIN gone too
-    assert "109119" in blob                      # masked tail survives
+    assert "TMBJK0NX4MY000000" not in blob      # full VIN gone
+    assert "WAUZZZ8T99A000000" not in blob       # composite VIN gone too
+    # The masked tail survives. Asserted as the whole mask rather than the bare
+    # six characters: the placeholder VINs end in a zero run, so a bare-digits
+    # check would also pass against text that never went through the masker.
+    assert "***000000" in blob
     assert "0x8DEEC19E6798565" in blob           # etag hash untouched

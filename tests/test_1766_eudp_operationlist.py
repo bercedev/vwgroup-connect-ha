@@ -26,7 +26,7 @@ from custom_components.vag_connect.cariad.exceptions import (
 )
 from custom_components.vag_connect.coordinator import _mbb_command_capability
 
-VIN = "WVWZZZAUZFW805377"
+VIN = "WVWZZZAUZFW000000"
 _LEGACY = "https://mal-1a.prd.ece.vwg-connect.com/api/rolesrights/operationlist/v3"
 _EUDP = "https://mal-3a.prd.eu.dp.vwg-connect.com/api/rolesrights/operationlist/v3"
 _AUTH_401 = APIError(

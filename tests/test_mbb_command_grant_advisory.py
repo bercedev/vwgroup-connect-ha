@@ -28,7 +28,7 @@ from custom_components.vag_connect.cariad._mbb import parse_mbb_operationlist
 from custom_components.vag_connect.cariad.api.vw_eu import VWEUClient
 from custom_components.vag_connect.cariad.exceptions import APIError, VehicleCommandError
 
-VIN = "WVWZZZAUZFW805377"
+VIN = "WVWZZZAUZFW000000"
 
 
 def _oplist(granted: bool, *, with_service: bool = True):

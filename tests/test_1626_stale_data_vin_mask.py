@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 
 from custom_components.vag_connect import repairs
 
-_VIN = "WVWZZZED9SE038720"
+_VIN = "WVWZZZED9SE000000"
 _ENTRY = "01M0R7251ZNWXP8G6G3CJMV4G5"
 
 

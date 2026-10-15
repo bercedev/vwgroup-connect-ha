@@ -22,7 +22,7 @@ from custom_components.vag_connect.cariad.auth._data_act_scraper import (
     _redact_body_snippet,
 )
 
-_VIN = "WVWZZZAUZFW805377"
+_VIN = "WVWZZZAUZFW000000"
 
 # A worst-case error body: it echoes the full VIN, the account e-mail, a
 # bearer-like token, a request URL with a query string, and enough prose filler
@@ -81,7 +81,7 @@ def _scraper(sess: Any) -> DataActScraper:
 def test_snippet_masks_vin_and_scrubs_secrets() -> None:
     out = _redact_body_snippet(_BODY, _VIN)
     assert _VIN not in out
-    assert "...805377" in out           # last 6 kept
+    assert "...000000" in out           # last 6 kept
     assert _EMAIL not in out
     assert "<redacted-email>" in out
     assert _TOKEN not in out
@@ -137,7 +137,7 @@ async def test_final_4xx_is_warning_with_redacted_snippet(
     assert "HTTP 400" in msg
     assert "no data feed will start" in msg
     assert "x-sky-isauth=0" in msg
-    assert "...805377" in msg
+    assert "...000000" in msg
     assert _VIN not in msg
     assert _EMAIL not in msg
     assert "<redacted-email>" in msg

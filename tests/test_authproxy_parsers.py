@@ -16,7 +16,7 @@ from custom_components.vag_connect.cariad.auth._website_authproxy import (
     WebsiteAuthProxyConnector,
 )
 
-_VIN = "WVWZZZAUZFW805377"
+_VIN = "WVWZZZAUZFW000000"
 
 _RELATIONS = {
     "user": {
