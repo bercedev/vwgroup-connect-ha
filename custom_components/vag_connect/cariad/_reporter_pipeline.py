@@ -151,8 +151,21 @@ def _safe_model(model: str | None, *, vin: str | None = None) -> str | None:
     ownership records. The footer claims "VINs masked to last 6 chars", so a
     full VIN leaking through the title/model bypasses that guarantee.
 
-    This is the single choke point every report flows through, so the guard
-    here is bulletproof regardless of how the upstream resolved the model:
+    This is the single choke point every report flows through, and against a
+    VIN the guard here is bulletproof regardless of how the upstream resolved
+    the model. It is NOT a general guarantee that the value is generic, which
+    the enumeration below makes plain: anything that is not VIN-shaped passes
+    through unchanged, a freely chosen vehicle name included.
+
+    That gap is live. api/vw_eu.py keeps the owner-set nickname out of the
+    model slot for VW and Audi, but api/skoda_official.py assigns
+    ``d.model = v.get("name")``, and that endpoint documents the field as the
+    user-defined vehicle name. So a name an owner typed can still reach a
+    public issue title by that path, and it will not be stopped here. Widening
+    this function is the obvious move and the wrong one until somebody decides
+    what to do about the ambiguity at source: the same field carries the model
+    for every owner who never renamed the car, so filtering it blind costs them
+    their model line.
 
     - empty / whitespace-only  → ``None`` (caller omits the line)
     - contains a VIN substring (17-char VIN charset, any case) → ``None``
