@@ -99,14 +99,55 @@ class TestOurOwnSpellingStillWorks:
         assert out["nickname"] == "**REDACTED**"
 
 
+class TestTheReportersOwnTwoItems:
+    """What @Fishermanjb actually asked for in #1828.
+
+    Worth being explicit: the nickname above is NOT one of his three items. He
+    reported image links, model specifications and a dealer id; looking at the
+    file for those three is what turned up the nickname. Two of his three are
+    here, and they are here on their own merits.
+    """
+
+    def test_the_render_image_urls_are_redacted_in_both_shapes(self):
+        """`image_urls`, our own name, was already redacted with the recorded
+        reason that render URLs 'encode the exact model/colour/config'. The wire
+        sends two other shapes of the same thing, and both walked past: a bare
+        `imageUrls` array and an `images` array of objects each carrying a `url`.
+        Masking our spelling and not theirs protected nothing."""
+        out = _scrub_raw({"imageUrls": ["https://x/a.png", "https://x/b.png"]})
+        assert out["imageUrls"] == "**REDACTED**"
+        out2 = _scrub_raw({"images": [{"url": "https://x/a.png", "view": "front"}]})
+        assert out2["images"] == "**REDACTED**"
+
+    def test_the_dealer_id_is_redacted(self):
+        """His reasoning is the right one and it is the same class as
+        parking_city: a dealer id is not his data, but it localises him. He put
+        it as 'often in the area of the user'."""
+        out = _scrub_raw({"dealerId": "DE-12345"})
+        assert out["dealerId"] == "**REDACTED**"
+
+    def test_images_is_specific_enough_to_be_safe_as_a_key(self):
+        """Counter-check on the decision: `images` is read in exactly one place
+        in the integration, so redacting it by key cannot swallow some unrelated
+        harmless container the way a bare `url` would."""
+        assert "images" in _RAW_REDACT_KEYS
+        out = _scrub_raw({"batteryStatus": {"currentSOC_pct": 35}})
+        assert out["batteryStatus"]["currentSOC_pct"] == 35
+
+
 class TestWhatIsDeliberatelyLeftAlone:
     """Records the decisions, so the next reader does not take the omission for
     an oversight the way this one was."""
 
     def test_a_bare_url_is_not_blanket_redacted(self):
-        """Redacting every 'url' would gut the raw export's reason to exist."""
+        """Redacting every 'url' would gut the raw export's reason to exist. The
+        two image shapes above are covered by their CONTAINER keys instead,
+        which is why this stays out."""
         assert "url" not in _RAW_REDACT_KEYS
 
     def test_model_name_is_not_treated_as_personal(self):
-        """Asked for in the same report, but it is payload size, not privacy."""
+        """His third item. Payload size, not privacy — and saying so plainly is
+        better than quietly masking it and implying it was sensitive."""
         assert "modelname" not in _RAW_REDACT_KEYS
+        out = _scrub_raw({"modelName": "ID.4 Pro Performance"})
+        assert out["modelName"] == "ID.4 Pro Performance"

@@ -401,6 +401,21 @@ _RAW_REDACT_KEYS = frozenset({
     # diagnostics download — and it reached a public issue that way the same day
     # this was found, sitting two lines below a correctly redacted licensePlate.
     "vehiclenickname",
+    # #1828 — @Fishermanjb's own two privacy items, both the wire shapes of
+    # things we already mask under our own names.
+    #
+    # The render image URLs: `image_urls` is in _REDACT_KEYS above with the
+    # recorded reason that they "encode the exact model/colour/config". The wire
+    # sends the same thing in two other shapes, and both walked past — a bare
+    # `imageUrls` array, and an `images` array of objects each carrying a `url`.
+    # Taken by their CONTAINER keys rather than by adding a bare `url`, which
+    # would gut the payload shapes the raw export exists for. Safe as keys:
+    # `images` is read in exactly one place in the integration, so neither can
+    # swallow an unrelated harmless container.
+    "imageurls", "images",
+    # The dealer id. Not his data, but his reasoning is right and it is the same
+    # class as parking_city above: "often in the area of the user".
+    "dealerid",
     "nickname", "firstname", "lastname", "givenname", "familyname", "fullname",
     "dateofbirth", "birthdate", "phone", "phonenumber", "mobile",
     "email", "emailaddress", "salutation",

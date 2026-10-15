@@ -403,10 +403,18 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   The map links are the smaller half: the two map images of where the car is parked are masked
   now, the same as the parking address, the city and the coordinates already were.
 
-  Two things from the same report were left alone on purpose. The model name and specifications
-  are noise rather than anything personal, so leaving them costs nothing but a few lines in the
-  file. And a blanket mask on anything called a URL would remove the payload shapes that make
-  the raw section useful for mapping a new field in the first place.
+  Also masked, and these are the two @Fishermanjb actually reported: the vehicle render image
+  links, and the dealer id. The render links were already masked under the name the integration
+  uses internally, with the note that they encode the exact model, colour and configuration —
+  but the two shapes the backend sends them in walked past that, so masking one spelling and
+  not the others protected nothing. The dealer id is not your data, but as he put it, it is
+  "often in the area of the user", which makes it the same kind of thing as the parking city.
+
+  One item from his report is deliberately left alone: the model name and specification list
+  are payload size, not privacy. Masking them would imply they were sensitive. And nothing
+  called simply a URL is masked wholesale, because that would remove the payload shapes that
+  make the raw section useful for mapping a new field in the first place — the two image cases
+  are taken by their container names instead.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.
