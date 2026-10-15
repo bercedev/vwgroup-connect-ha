@@ -49,6 +49,7 @@ from aiohttp import ClientConnectionError, ClientSession, ClientTimeout
 from .._util import drop_charge_sentinel, drop_odometer_sentinel
 from ..exceptions import (
     AuthenticationError,
+    CariadError,
     EmailTwoFactorRequiredError,
     MarketingConsentError,
     PortalInteractionRequiredError,
@@ -6474,6 +6475,48 @@ class EUDataActConnector:
         # times before giving up as "no data this poll", recovering polls the
         # portal would otherwise drop. A 404/410 (request not provisioned)
         # returns immediately; a real 401/403 still raises.
+        # #1834 (@travel-and-cache) — the session this connector was handed is
+        # the entry's own, created with async_create_clientsession
+        # (coordinator.py:1592), and the comment there says it: "unloading the
+        # entry closes it; there is nothing to unwind by hand." So a poll still
+        # in flight when the entry unloads or reloads reaches a closed session,
+        # and aiohttp answers with a bare RuntimeError("Session is closed").
+        # Nothing caught it: the handler below takes TimeoutError and
+        # ClientConnectionError, a RuntimeError is neither, and the error
+        # reporter has no exclusion list — so a shutdown race was filed as a
+        # crash on 4.13.0.
+        #
+        # Checked here rather than in the handler because retrying is the one
+        # thing that cannot help: the session will not reopen, and the retry
+        # loop would burn its three backoff sleeps before giving up.
+        #
+        # NOT raised as UpstreamUnavailableError, even though that type is
+        # already imported and would have been the quick move: its message tells
+        # the user "server-side issue at VW … do NOT reconfigure", and this is
+        # our own session going away locally. A false explanation is worse than
+        # a plain one.
+        # ``is True`` and not merely truthy: most tests here hand the connector
+        # a MagicMock, whose auto-created ``.closed`` attribute is a Mock and
+        # therefore truthy, which made this guard swallow nine live tests the
+        # first time it was written. aiohttp's ClientSession.closed is a real
+        # bool property, so the strict test is exact for the thing that matters
+        # and inert for every stand-in.
+        if getattr(self._session, "closed", False) is True:
+            _LOGGER.debug(
+                "EU Data Act: the entry's session is closed, so %s was not "
+                "attempted (the entry is unloading or reloading; the next "
+                "setup gets a fresh session)",
+                _safe_api_url(url),
+            )
+            if soft:
+                return None
+            raise CariadError(
+                "EU Data Act: the connection was closed while this read was "
+                "starting. That happens when the integration entry is "
+                "unloaded or reloaded; nothing is wrong with the account, and "
+                "the next setup opens a new one."
+            )
+
         for attempt in range(len(_PORTAL_RETRY_DELAYS) + 1):
             try:
                 async with self._session.get(
