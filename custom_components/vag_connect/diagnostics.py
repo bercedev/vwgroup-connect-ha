@@ -84,6 +84,18 @@ _REDACT_KEYS = frozenset({
     # as one PII unit for exactly this reason (their #477 was this leak class).
     # Redact it by key so it can't fall through regardless of the value form.
     "parking_city",
+    # The two map renders of the parking position (OLA parkingposition supplies
+    # them; the comment at their assignment calls them map URLs of the parking
+    # location). Same family as parking_address and parking_city above, and the
+    # only members of it that had no branch. Redacted by key, like the others,
+    # because the generic string branch is not shaped for this value form.
+    # Whether the URL encodes the position as numbers or as an opaque token is
+    # not established — every sample in our fixtures is a bare "https://..." —
+    # and redacting is the cheap side of that uncertainty. Pinned by
+    # tests/test_diagnostics_parking_map_url.py, which also records why the
+    # string branch does not cover it, so this entry is not removed as redundant.
+    "parking_map_url_dark",
+    "parking_map_url_light",
     "user_id",
     "account_id",
     # D#1231 — the volkswagen.de profile block is personal: the number plate
@@ -94,6 +106,22 @@ _REDACT_KEYS = frozenset({
     "license_plate",
     "vehicle_nickname",
     "image_urls",
+    # #1832 — our own two other render-URL fields: the same content as
+    # ``image_urls`` directly above, under different names, and with no branch
+    # at all. ``render_url`` is the Skoda widget's ``vehicle.renderUrl``
+    # (cariad/models.py:1153); ``composite_render_urls`` is the multi-angle
+    # render map the coordinator builds at coordinator.py:7134
+    # (cariad/models.py:1166) and then merges INTO ``image_urls`` — so the merge
+    # target was masked while the source dict went out whole. ``to_dict`` is a
+    # bare ``asdict`` (cariad/models.py:2450-2453) and the per-vehicle export
+    # runs no field allowlist, so both reached the download complete; the #1310
+    # string branch below masked the VIN inside them, never the URL itself.
+    # Cost, stated rather than hidden: masking the dict whole takes its
+    # viewPoint labels with it. That is the cost ``image_urls`` has always paid,
+    # and matching it beats inventing a third behaviour for our own parsed
+    # state. Pinned by tests/test_1832_render_url_spellings.py.
+    "render_url",
+    "composite_render_urls",
     # Companion: the VW app's charging-location labels are the owner's own
     # names for where the car habitually charges ("Home", a street, an
     # employer), the same class as parking_city and vehicle_nickname above.
@@ -355,12 +383,18 @@ def _scrub(value: Any, *, gps_round: bool = False) -> Any:
         # that surface in error traces).
         masked = _mask_email(value)
         # #1310 (indigomejor) — a VIN can hide inside a string VALUE: the Škoda
-        # widget ``render_url`` is ``.../widget-renders/<VIN>.png``. This branch
-        # masked only email + GPS, so the full VIN leaked in
-        # ``vehicles.<key>.render_url`` while the sibling ``vin`` field and the
-        # raw camelCase ``renderUrl`` (via _scrub_raw) were both masked. Mask the
-        # VIN here too so every string value matches (VIN only — UUIDs stay as
-        # structural grounding data, see _mask_key).
+        # widget render URL is ``.../widget-renders/<VIN>.png``. This branch
+        # masked only email + GPS, so the full VIN leaked out of a URL that no
+        # key-based branch above listed. Mask the VIN here too (VIN only — UUIDs
+        # stay as structural grounding data, see _mask_key).
+        # Re-checked for #1832, because the note that stood here overstated what
+        # was masked: it said the raw camelCase ``renderUrl`` was masked, and
+        # only the VIN INSIDE that value ever was — by this same regex in
+        # ``_scrub_raw``. The key was in neither set, so the URL itself went out
+        # whole in both sections. Both spellings are key-redacted as of #1832,
+        # so for those two this branch is no longer what does the work; it stays
+        # as the fallback for a URL under a key neither set lists, which is what
+        # tests/test_1310_indigomejor_fixes.py measures.
         masked = _VIN_RE.sub(lambda m: mask_vin(m.group(0)), masked)
         return _mask_location_qs(masked, gps_round=gps_round)
     return value
@@ -378,6 +412,79 @@ _RAW_REDACT_KEYS = frozenset({
     "gpscoordinates", "carcapturedgpscoordinates", "coordinates",
     "latitude", "longitude", "lat", "lng", "lon",
     "licenceplate", "licenseplate", "numberplate", "registrationnumber",
+    # #1828 — the bare "nickname" below does not cover the key the wire actually
+    # sends. vw.de, the authproxy relations read and SEAT/CUPRA send
+    # ``vehicleNickname``; VW North America sends ``vehicleNickName``. Both
+    # lowercase to this, so one entry covers them, and neither matched before:
+    # our own snake_case ``vehicle_nickname`` is in _REDACT_KEYS and the bare
+    # ``nickname`` is here, but the compound wire spelling was in neither set and
+    # no value regex catches a free-text name. The raw-payload section is not
+    # opt-in, so an owner-chosen nickname went out in cleartext in every vw.de
+    # diagnostics download — and it reached a public issue that way the same day
+    # this was found, sitting two lines below a correctly redacted licensePlate.
+    "vehiclenickname",
+    # #1832 — one more reader, with a spelling of its own: the CARIAD garage
+    # list sends ``vehicleNick``, with no "name" on the end
+    # (cariad/api/vw_eu.py:557, inside ``_pick_model`` at :553, inside
+    # ``get_vehicles`` at :440). It lowercases to ``vehiclenick``, which the
+    # compound entry above does not reach because the raw match is exact
+    # lowercased membership (see ``_scrub_raw`` below), and no value regex
+    # catches a free-text name.
+    # Calibrated: this one is LATENT for the export today, NOT a second live
+    # leak. The raw section walks ``client.last_raw_responses``, and on this
+    # client that dict is rebuilt per poll from the status endpoints
+    # (cariad/api/vw_eu.py:1047-1053) or copied from the website proxy (:851) —
+    # the garage body ``get_vehicles`` parses is never recorded in it.
+    # Registered anyway, because a key set is the wrong place to keep the
+    # assumption that nobody will ever record that body.
+    "vehiclenick",
+    # #1828 — @Fishermanjb's own two privacy items, both the wire shapes of
+    # things we already mask under our own names.
+    #
+    # The render image URLs: `image_urls` is in _REDACT_KEYS above with the
+    # recorded reason that they "encode the exact model/colour/config". The wire
+    # sends the same thing in two other shapes, and both walked past — a bare
+    # `imageUrls` array, and an `images` array of objects each carrying a `url`.
+    # Taken by their CONTAINER keys rather than by adding a bare `url`, which
+    # would gut the payload shapes the raw export exists for. Safe as keys:
+    # `images` is read in exactly one place in the integration, so neither can
+    # swallow an unrelated harmless container.
+    "imageurls", "images",
+    # The dealer id. Not his data, but his reasoning is right and it is the same
+    # class as parking_city above: "often in the area of the user".
+    "dealerid",
+    # #1832 — the wire spellings of render/map URL fields we already mask under
+    # our own names. Unlike ``vehiclenick`` above, these three ARE live: the
+    # Skoda widget body is a recorded raw channel (cariad/api/skoda.py:1480,
+    # channel name "widget") and carries ``vehicle.renderUrl`` plus
+    # ``parkingPosition.maps.lightMapUrl`` / ``darkMapUrl``; the expected-key
+    # table spells all three out (cariad/_unexpected_keys.py:353 and :365-366)
+    # and SEAT/CUPRA read the two map keys at
+    # cariad/api/seat_cupra.py:1849-1850. Our ``render_url`` and
+    # ``parking_map_url_dark`` / ``_light`` were masked while these were in
+    # neither set — our name masked, the wire's not, the same shape of mistake
+    # as the nickname above. All three are scalar URL strings, so taking them by
+    # key costs no payload shape; their container ``maps`` is deliberately NOT
+    # listed, so the block keeps its shape and only the two URLs go.
+    "renderurl", "lightmapurl", "darkmapurl",
+    # #1832 — and the two render CONTAINERS on the same recorded Skoda
+    # ``vehicle-status`` channel, found by sweeping the expected-key table
+    # rather than by guessing. ``renders`` holds the lightMode / darkMode render
+    # blocks that a community Scout report observed on that channel
+    # (cariad/_unexpected_keys.py:114-115, from #107), so it is live the same
+    # way the three above are. ``compositeRenders`` is the wire shape of
+    # ``composite_render_urls`` and is registered on that same channel
+    # (cariad/_unexpected_keys.py:116); unlike ``renders`` its entry records no
+    # observation, so whether a vehicle-status body carries it is not
+    # established here — it is listed because leaving the wire spelling open
+    # while masking our own name is the mistake this issue is about.
+    # Both taken by the container key, like ``images``, because the per-layer
+    # URLs sit under a bare ``url`` and this set deliberately does not carry
+    # that. Safe as keys: at all three places ``renders`` is read in the
+    # integration (cariad/api/seat_cupra.py:563, cariad/api/skoda.py:2501,
+    # coordinator.py:7103) the key names a render-image container, so neither
+    # entry can swallow an unrelated harmless one.
+    "renders", "compositerenders",
     "nickname", "firstname", "lastname", "givenname", "familyname", "fullname",
     "dateofbirth", "birthdate", "phone", "phonenumber", "mobile",
     "email", "emailaddress", "salutation",

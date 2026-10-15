@@ -454,6 +454,11 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Sicherheit / Security
 
+- **Diagnostics redaction hardening.** An internal review pass widened what the diagnostics
+  download masks before you attach it to an issue, in both the per-vehicle and the raw-payload
+  section — nothing about the integration's behaviour changes, no sensor is affected, and the
+  structure that makes a raw capture useful for mapping a new field is kept. Thanks
+  @Fishermanjb for the review pass that started it.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.
