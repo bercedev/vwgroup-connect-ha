@@ -217,6 +217,35 @@ _URL_UUID_RE = re.compile(
 _URL_VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 
 
+# #1827 — VW inserted an OPTIONAL advertising opt-in into the login chain on
+# 2026-10-13/14 ("Personalised advertising tailored to your requirements"). It is
+# NOT the marketing-consent page the IDP already served: different host and path
+# (``consent.vwgroup.io/hooks/<name>`` rather than
+# ``identity.vwgroup.io/v2/login/ui/marketing-consent``). The page offers a plain
+# "Not now" link; following it answers 302 to the IDP's action-hook continue
+# endpoint and the login finishes on the portal as before.
+#
+# Two reporters hit this within the same hours and the landing shows up in their
+# logs as the generic "refresh did not land on the portal", because the chain
+# simply ends on a host that is not volkswagen.de. Independently reported on
+# another integration riding the same authproxy channel.
+#
+# WE DECLINE, ALWAYS, AND NEVER ACCEPT. The opt-in is optional advertising
+# consent, and an integration has no business agreeing to that on a car owner's
+# behalf — declining is both the honest default and what the page's own "Not
+# now" does. Only a skip link the PAGE offers is followed, never one we build,
+# so if VW stops offering it we stop skipping rather than guessing a URL.
+#
+# Matched by SHAPE (``/hooks/<anything>/skip``) rather than by the one hook name
+# observed, so a second hook of the same kind needs no code change. The host is
+# pinned, so the shape cannot match somewhere it was never meant to.
+_ACTION_HOOK_HOST = "consent.vwgroup.io"
+_ACTION_HOOK_SKIP_RE = re.compile(
+    r"""href\s*=\s*["'](?P<href>[^"']*/hooks/[^"']*/skip\?[^"']*)["']""",
+    re.IGNORECASE,
+)
+
+
 def _safe_url(url: str) -> str:
     """Host+path of *url*, query + fragment stripped, UUID + VIN path segments masked."""
     try:
@@ -1149,6 +1178,15 @@ class WebsiteAuthProxyConnector:
 
         # 3. Email-OTP challenge? Stash the challenge URL + state and bail out
         #    so the UI can collect the code.
+        # #1827 — the interactive path lands on the same hook. Decline it here
+        # too, before the OTP test and before _finalise_login's host check,
+        # which would otherwise read the interstitial as "login did not
+        # complete".
+        _declined = await self._decline_action_hook(landed, landed_html)
+        if _declined is not None:
+            landed, landed_status = _declined
+            landed_html = ""
+
         if "/u/email-challenge" in landed or "/u/mfa" in landed:
             self._otp_url = landed
             self._otp_html = landed_html
@@ -1188,6 +1226,7 @@ class WebsiteAuthProxyConnector:
         fields, action = _login_fields(self._otp_html or "")
         code_clean = str(code).strip()
         matched = False
+        matched_keys: list[str] = []
         for key in list(fields):
             kl = key.lower()
             if kl in (
@@ -1196,12 +1235,42 @@ class WebsiteAuthProxyConnector:
             ):
                 fields[key] = code_clean
                 matched = True
+                matched_keys.append(key)
             elif "remember" in kl:
                 fields[key] = "true"
         if not matched:
             fields["code"] = code_clean
         if self._otp_state:
             fields.setdefault("state", self._otp_state)
+
+        # #1827 — this method had NO logging at all, while begin_login above has
+        # five lines. Two reporters hit the email-OTP step within the same hours
+        # and one attached a full debug log: it ends at "email-OTP challenge
+        # pending" and says nothing about the step that failed, so the log could
+        # not distinguish the two causes. That is the #1712 lesson repeating —
+        # the line that identifies the failure has to exist before the report.
+        #
+        # The FIELD NAMES are the load-bearing fact. The whole reason the
+        # matching loop above exists (v2.14.10, and its test
+        # tests/test_v21410_otp_field_name.py) is that the IDP's code input is
+        # not always called "code": when none of the recognised names is present
+        # the fallback writes "code", the IDP reads that as "no code entered",
+        # re-issues a FRESH challenge — a new email — and the flow bounces on
+        # the challenge page for ever. Both reporters describe exactly that
+        # shape. If the IDP has renamed the field again, this line says so in
+        # one glance instead of costing a round of "please enable debug first".
+        #
+        # Names only, never values: ``fields`` holds the code, the _csrf and the
+        # hmac. Iterating the dict yields keys, and the code is not logged
+        # anywhere here or below.
+        _LOGGER.debug(
+            "Website authproxy submit_otp: %s; form fields: %s",
+            f"code set on {', '.join(matched_keys)}" if matched
+            else "NO recognised code field in the form — fell back to 'code', "
+                 "which the IDP may read as no code entered",
+            ", ".join(sorted(fields)),
+        )
+
         post_url = _resolve_action(self._otp_url, action)
         async with self._session.post(
             post_url,
@@ -1213,9 +1282,34 @@ class WebsiteAuthProxyConnector:
             landed = str(resp.url)
             landed_html = await resp.text(errors="replace")
             landed_status = resp.status
+            landed_chain = self._redirect_hosts(
+                getattr(resp, "history", ()), landed,
+            )
+
+        # Same shape as the two begin_login lines, so a reporter's log reads as
+        # one flow. ``_redirect_hosts`` emits hostnames only — it drops paths and
+        # query strings on purpose, because the OAuth state and any tokens live
+        # in the query.
+        _LOGGER.debug(
+            "Website authproxy submit_otp POST → status %s, chain: %s",
+            landed_status, landed_chain,
+        )
 
         if landed_status >= 400 or "email-challenge" in landed:
             err = _login_error(landed_html)
+            # Which of the two conditions fired, and whether the page carried an
+            # error at all. The page's own text is NOT logged: it is the IDP's
+            # message, it can name the account, and it already travels to the
+            # user in the exception below — logging it here would add a second
+            # place for it to escape and no new information.
+            _LOGGER.debug(
+                "Website authproxy submit_otp rejected: %s at %s; "
+                "page error text: %s",
+                f"HTTP {landed_status}" if landed_status >= 400
+                else "landed back on the email-challenge page",
+                _safe_url(landed),
+                "present" if err else "none",
+            )
             raise AuthenticationError(
                 err or "Website authproxy: OTP rejected — check the code"
             )
@@ -1309,6 +1403,17 @@ class WebsiteAuthProxyConnector:
             ) as resp:
                 landed = str(resp.url)
                 status = resp.status
+                # #1827 — the body is needed only to find a consent hook's skip
+                # link, so it is read only when the chain ended on that one
+                # host. Reading it for every off-portal landing would fetch and
+                # discard a page on each dead-resume poll, and it would also
+                # demand a ``text()`` from every existing test double that lands
+                # off-portal for an unrelated reason.
+                landed_html = (
+                    await resp.text(errors="replace")
+                    if urlparse(landed).hostname == _ACTION_HOOK_HOST
+                    else ""
+                )
         except TooManyRedirects as exc:
             # Same contract as begin_login: surface a normal auth failure so the
             # caller re-authenticates instead of a raw aiohttp error reaching
@@ -1340,9 +1445,20 @@ class WebsiteAuthProxyConnector:
         # host-aware check (see its landing test); this brings ``refresh`` in
         # line with it.
         landed_parts = urlparse(landed)
+        on_portal = landed_parts.netloc == urlparse(_SITE_BASE).netloc
+        # #1827 — before any verdict: an optional consent hook is not a dead
+        # session. Decline it and judge where the login actually ended up, so
+        # the clauses below see the real landing instead of the interstitial.
+        if not on_portal:
+            _declined = await self._decline_action_hook(landed, landed_html)
+            if _declined is not None:
+                landed, status = _declined
+                landed_parts = urlparse(landed)
+                on_portal = (
+                    landed_parts.netloc == urlparse(_SITE_BASE).netloc
+                )
         landed_host = landed_parts.hostname or ""
         landed_path = landed_parts.path or ""
-        on_portal = landed_parts.netloc == urlparse(_SITE_BASE).netloc
         # Log the chain unconditionally — hostnames only, so no OAuth state or
         # token ever reaches the log. Previously only the redirect-loop branch
         # logged it, which left a reporter's debug log unable to show where the
@@ -1480,6 +1596,57 @@ class WebsiteAuthProxyConnector:
                 " on the reactive path this cycle)",
                 type(exc).__name__,
             )
+
+    async def _decline_action_hook(
+        self, landed: str, html: str
+    ) -> "tuple[str, int] | None":
+        """Decline an optional consent hook; return where the login then went.
+
+        ``None`` means the caller's own verdict stands: either this is not such
+        a hook, or the page offered no skip link. Both are deliberately
+        non-fatal here — this method only ever removes a blocker, it never
+        creates one.
+        """
+        if urlparse(landed).hostname != _ACTION_HOOK_HOST:
+            return None
+        match = _ACTION_HOOK_SKIP_RE.search(html or "")
+        if match is None:
+            _LOGGER.debug(
+                "Website authproxy: landed on a consent hook at %s with no skip "
+                "link on the page — leaving the verdict to the caller",
+                _safe_url(landed),
+            )
+            return None
+        _LOGGER.debug(
+            "Website authproxy: declining the optional consent hook at %s",
+            _safe_url(landed),
+        )
+        try:
+            async with self._session.get(
+                _resolve_action(landed, match.group("href")),
+                headers=self._headers({"Referer": landed}),
+                allow_redirects=True,
+                max_redirects=_MAX_SSO_REDIRECTS,
+                timeout=ClientTimeout(total=_TIMEOUT_S),
+            ) as resp:
+                after = str(resp.url)
+                after_status = resp.status
+                after_chain = self._redirect_hosts(
+                    getattr(resp, "history", ()), after,
+                )
+        except (TooManyRedirects, ClientError, TimeoutError) as err:
+            # Declining is best-effort: if it fails, the caller raises the same
+            # thing it would have raised without us.
+            _LOGGER.debug(
+                "Website authproxy: declining the consent hook failed (%s)",
+                type(err).__name__,
+            )
+            return None
+        _LOGGER.debug(
+            "Website authproxy: after declining → status %s, chain: %s",
+            after_status, after_chain,
+        )
+        return after, after_status
 
     def _finalise_login(self, landed_url: str) -> None:
         """Mark logged-in iff we ended back on the volkswagen.de host, and the
