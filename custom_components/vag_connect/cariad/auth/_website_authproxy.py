@@ -2367,16 +2367,40 @@ class WebsiteAuthProxyConnector:
         self._images_cache[vin] = (time.monotonic(), images)
         return images
 
+    def _tail_read_was_fresh(self, vin: str, since: float) -> bool:
+        """Did a tail read actually reach the backend for *vin* this poll?
+
+        #1827 — ``get_master_data`` serves ``_master_cache`` for 24 h without any
+        network read, and past the TTL it returns the stale cached value when both
+        of its reads soft-fail; ``get_exterior_images`` does the same over 6 h.
+        Neither rewrites the cache stamp on those paths, so a stamp at or after
+        the poll's start is exactly "this poll got an answer out of the session" —
+        the thing the tail decision means to test, and the only thing a cache hit
+        cannot fake.
+        """
+        for _cache in (
+            getattr(self, "_master_cache", None),
+            getattr(self, "_images_cache", None),
+        ):
+            if not _cache:
+                continue
+            _entry = _cache.get(vin)
+            if _entry is not None and _entry[0] >= since:
+                return True
+        return False
+
     async def get_vehicle_data(self, vin: str) -> VehicleData:
         """Fetch charging + maintenance + live-status for *vin* → ``VehicleData``.
 
         Every read is ``soft`` / fail-soft — a transient backend hiccup or a
         parse-miss on any one leaves the corresponding fields unset instead of
-        failing the whole poll. A real 401/403 on the CORE reads (the relations
-        preflight / charging / maintenance) propagates so the caller re-logs in;
-        the optional live-status reads and any 412 precondition degrade to
-        no-data instead. The vehicle is marked online once any data block parsed
-        successfully.
+        failing the whole poll. A real 401/403 on a CORE read (the relations
+        preflight / charging / maintenance) no longer aborts the poll on its own:
+        each is recorded and the remaining reads still run, and the decision at
+        the end propagates only when neither a core read nor a tail read got an
+        answer out of the session (#1827). The optional live-status reads and any
+        412 precondition degrade to no-data instead. The vehicle is marked online
+        once any data block parsed successfully.
 
         v2.16.0 (BETA, opt-in) — three additive read-path fields, all
         disabled-by-default at the sensor layer (unvalidated live endpoints):
@@ -2387,6 +2411,11 @@ class WebsiteAuthProxyConnector:
         """
         d = VehicleData(vin=vin)
         got_data = False
+        # #1827 — monotonic start of THIS poll. The tail decision at the end has
+        # to tell a fresh read apart from a cache hit, and the two tail caches
+        # already stamp themselves on their fresh-write path only; comparing
+        # their stamp against this is enough, so no parallel bookkeeping.
+        _poll_t0 = time.monotonic()
         # v4.7.11 (#465, toglo) — a per-car vw.de wall (401/403/412->Auth on a
         # core read: relations / charging / maintenance / the relation-detail
         # fallback) used to abort the whole poll BEFORE the tail reads below, so a
@@ -2402,14 +2431,45 @@ class WebsiteAuthProxyConnector:
 
         # Resolve the car's platform (MBB/MEB) up front so the live-status reads
         # below pick the correct gdc, and reuse the parsed relations for the
-        # nickname/plate enrich at the end (one relations fetch, not two). A
-        # genuine 401/403 here propagates (dead session → re-login).
+        # nickname/plate enrich at the end (one relations fetch, not two).
         try:
             rels: AuthproxyRelations | None = None
             try:
                 rels = await self.get_relations()  # also populates self._vin_backend
-            except AuthenticationError:
-                raise
+            except AuthenticationError as exc:
+                # #1827 (Fishermanjb) — a 401 here used to re-raise, unwinding
+                # past the five remaining core reads (charging, maintenance, fuel
+                # and the three trip memories). His car's relations endpoint was
+                # walled while master data on the same poll answered, so charging
+                # never ran, the vw.de snapshot carried no battery_soc, and the
+                # merge correctly kept the batch feed's last capture — a SoC
+                # several days old next to a live-looking channel.
+                #
+                # This is the veto #1 already removed for charging-vs-maintenance,
+                # one read further up: relations is realm vw-de, charging is realm
+                # vwag-weconnect, so a wall on the first is not proof the session
+                # is dead. Record it, fall through, and let the tail decision at
+                # the end make the live/dead call — it already does, and it is the
+                # function's only dead-session gate.
+                #
+                # Cost when the car is NOT MEB: get_relations is the sole writer
+                # of self._vin_backend, so after a wall _gdc falls back to the
+                # WeConnect gdc, which an MBB car answers with 412 on all six
+                # gdc-carrying reads. Each degrades to None plus a
+                # "412 precondition (wrong-platform gdc?)" entry in diagnostics,
+                # which is why that label exists. Not a new failure mode: the
+                # non-auth branch below has fallen through with an unresolved gdc
+                # since #1659 (see tests/test_1709_h2_response_signatures.py) —
+                # this widens that window to the auth case rather than opening it.
+                _core_exc = exc
+                self.probe_outcomes["vwde_core_read:relations"] = (
+                    _http_status_from_exc(exc)
+                )
+                _LOGGER.info(
+                    "vw.de relations preflight walled for %s (%s); running the "
+                    "remaining core reads anyway (#1827)",
+                    vin[-6:], exc,
+                )
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.debug(
                     "Website authproxy relations preflight skipped for %s (%s)",
@@ -2751,10 +2811,20 @@ class WebsiteAuthProxyConnector:
             # after a charging wall) already produced data: the session is alive,
             # so re-raising would throw that data away and force a needless
             # refresh+retry.
-            _tail_ok = bool(
-                got_data or d.image_urls or d.model or d.model_year
-                or d.exterior_color or d.engine_power
-            )
+            # #1827 — this used to read ``d.model or d.exterior_color or …``,
+            # i.e. "is there a value", which a cache hit satisfies. Once a VIN sat
+            # in ``_master_cache`` the tail "delivered" on every walled poll
+            # forever, ``_tail_ok`` was permanently True, and the re-raise below —
+            # the only thing that triggers _read_authproxy's refresh+retry
+            # (api/base.py:608-613) and sole mode's reactive refresh
+            # (api/vw_eu.py:844-846) — became unreachable for the life of the
+            # connector instance. A genuinely dead session then had no reactive
+            # recovery at all; only the proactive 10-minute ``maybe_roll`` was
+            # left. Ask whether a read REACHED the backend this poll instead.
+            # The static fields do not flicker when this re-raises: they are held
+            # indefinitely one layer up by STATIC_MASTER_FIELDS
+            # (vehicle_cache.py:97-100), which exists for exactly this case.
+            _tail_ok = bool(got_data) or self._tail_read_was_fresh(vin, _poll_t0)
             if not _tail_ok:
                 raise _core_exc
             _LOGGER.debug(

@@ -375,6 +375,24 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **An interrupted walk** discards any setting it left unsaved instead of sending it with the next command (gszigethy/vwgroup-connect-ha#53).
 - **Departure timers** that were not read show unknown, not off (gszigethy/vwgroup-connect-ha#10).
 - **Vehicle Settings** is read even when the charge target is already known (gszigethy/vwgroup-connect-ha#9).
+- **A stale battery level on a car whose volkswagen.de channel was plainly being read.**
+  The poll opens with a relations lookup that resolves which platform the car is on, and a
+  refusal there used to abandon the rest of the poll — so the charging read never ran, the
+  volkswagen.de snapshot carried no battery level at all, and the merge kept the only value it
+  had: the portal feed's last capture, days old next to a channel that looked live. Nothing in
+  the merge was wrong. The refusal is now recorded and the remaining reads still run, exactly
+  as a refusal on one read already stopped costing the others. On a car that is not MEB the
+  platform stays unresolved after such a refusal and those reads are expected to come back
+  empty, which the diagnostics name. Thanks @Fishermanjb (#1827).
+- **A session that had really expired stopped being noticed.** At the end of the same poll the
+  integration decides whether a refused read means "this one car is walled" or "the session is
+  dead", and it decided by asking whether a model name or colour had been filled in. Those are
+  kept for a day once read, so from the first successful poll onward the answer was always yes:
+  the "session is dead" branch could not be reached again for as long as Home Assistant stayed
+  running, and reconnecting was left to the ten-minute background refresh on its own. The
+  question is now whether a read actually reached Volkswagen during that poll. The model,
+  colour and renders do not flicker as a result — they are held a layer further up, which is
+  what that was always for. Found while looking into #1827.
 
 #### Fixes in shared code (all channels)
 
