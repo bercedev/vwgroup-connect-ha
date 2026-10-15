@@ -26,6 +26,7 @@ Usage from a brand client::
 
 from __future__ import annotations
 
+import base64
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable
@@ -1295,6 +1296,63 @@ def _encoded_identifier(text: str) -> str | None:
     return None
 
 
+_B64_RUN_RE = re.compile(r"[A-Za-z0-9+/]{32,}={0,2}")
+# A decoded run this printable is a document, not binary. JSON and plain text
+# land at ~1.0; random bytes sit near 0.34, so the two do not overlap.
+_B64_PRINTABLE_MIN = 0.9
+
+
+def _encoded_document(text: str) -> tuple[str, int] | None:
+    """#1830 — name what a BASE64 run is carrying, and its length, or None.
+
+    ``_encoded_identifier`` above decodes only hex, and said so for a reason:
+    "that is the encoding the EU Data Act export actually uses for its
+    credential blobs". #1830 (@autosklo, Audi Q4) retired that premise — the
+    export also ships base64, in this case the ``viwi_DriverNotification``
+    family, whose value is a base64 JSON array of the notifications shown to the
+    driver.
+
+    Base64 defeats every rule below it in ``mask_value``: the plain-text
+    patterns cannot match an identifier that is not plain text, and the
+    80-character truncation then publishes whatever the first 60 decoded bytes
+    happen to be. That is precisely the #1690 failure — the one whose own
+    comment records that it happened five times and was hand-redacted four times
+    before the masker was fixed, and that truncation is not redaction. In #1830
+    nothing escaped, because the cut landed inside a classification name; which
+    way the cut lands is not a protection.
+
+    Two things make a run worth removing whole, matching the hex rule's
+    reasoning that an encoding must not be partially redacted:
+      * an identifier inside it, same test as hex; or
+      * a decode that is almost entirely printable, meaning the base64 was
+        carrying a document. Content addressed to the driver is not field
+        discovery, and for discovery the field's presence and length are the
+        whole signal.
+
+    Standard alphabet only. A URL-safe variant (``-``/``_``) has not been
+    observed on this surface, and admitting those characters would start
+    decoding ordinary snake_case values; it can be added when something shows up
+    that needs it.
+    """
+    for run in _B64_RUN_RE.findall(text):
+        trimmed = run.rstrip("=")
+        trimmed = trimmed[: len(trimmed) // 4 * 4]
+        if not trimmed:
+            continue
+        try:
+            raw = base64.b64decode(trimmed, validate=True)
+        except Exception:  # noqa: BLE001 — not base64 after all
+            continue
+        if not raw:
+            continue
+        if _ASCII_VINISH_RE.search(raw):
+            return "credential", len(run)
+        printable = sum(1 for b in raw if 32 <= b < 127 or b in (9, 10, 13))
+        if printable / len(raw) >= _B64_PRINTABLE_MIN:
+            return "text", len(run)
+    return None
+
+
 def mask_value(value: Any, *, max_len: int = 80) -> str:
     """Anonymise a sample value for logging / external sharing.
 
@@ -1336,6 +1394,12 @@ def mask_value(value: Any, *, max_len: int = 80) -> str:
         _decoded_hit = _encoded_identifier(s)
         if _decoded_hit:
             return f'"[redacted {_decoded_hit} blob, {len(s)} chars]"'
+        # #1830 — the same argument one encoding over. Checked after hex so a
+        # hex blob keeps its existing label and length, and before the
+        # plain-text rules so nothing inside a base64 run can slip past them.
+        _b64_hit = _encoded_document(s)
+        if _b64_hit:
+            return f'"[redacted {_b64_hit[0]} blob, {len(s)} chars]"'
         s = _VIN_RE.sub(lambda m: mask_vin(m.group(0)), s)
         s = _EMAIL_RE.sub("***@***", s)
         s = _JWT_RE.sub("[token]", s)
