@@ -62,7 +62,17 @@ _MARKERS = ("TEST", "SYNTHET", "SYNTH", "KEEP", "DUMMY", "FAKE", "EXAMPLE",
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
               ".pytest_cache", ".ruff_cache", "htmlcov"}
 # This file alone, because the guidance it prints spells out example VINs to
-# explain the rules. Nothing else is exempt, and the exemption list is kept to one
+# explain the rules.
+#
+# Measured, and the honest version is weaker than it reads: all three examples
+# main() prints are judged synthetic by looks_synthetic() — a zeroed serial, a
+# TEST marker, a padded counter — so this file would scan clean with no
+# exemption at all. The entry is a guard rail for a future example that is not
+# synthetic, not something the current text needs. Said plainly because the
+# exemption is the guard's only blind spot, and a blind spot justified by a
+# reason that does not hold is one nobody will think to remove.
+#
+# Nothing else is exempt, and the exemption list is kept to one
 # entry on purpose: a guard that looks away from a file is a guard whose blind spot
 # is exactly where the awkward cases collect. The guard's own test file is scanned
 # too, and it asserts that this set does not mention it.

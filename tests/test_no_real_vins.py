@@ -23,9 +23,13 @@ and it must not buy a green result by exempting itself from the guard. A guard
 with a self-exemption is a guard with a blind spot, and the blind spot is exactly
 where the awkward cases accumulate — so there is no skip entry for this file.
 
-The guard scans this file. Whole seventeen-character VINs in the negative-case
-list below do match the guard's pattern, and they go unreported because
-looks_synthetic() recognises them, not because the scan cannot see them. The
+The guard scans this file. Nine of the ten seventeen-character literals in the
+negative-case list below do match the guard's pattern, and they go unreported
+because looks_synthetic() recognises them, not because the scan cannot see
+them. The tenth, WVWZZZTESTVIN0001, is never seen by the pattern at all: the
+standard excludes I, O and Q from the VIN alphabet, and the word TEST**VIN**
+carries an I. It is a fine negative case and a poor example of one, since it
+would pass even if looks_synthetic() stopped working. The
 serials in the positive fixtures are invented — right manufacturer, right type
 code, a serial drawn from nothing — so they exercise the "looks real, refuse it"
 path without being anybody's car.
