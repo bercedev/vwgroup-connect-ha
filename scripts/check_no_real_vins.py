@@ -42,7 +42,15 @@ from pathlib import Path
 
 # A VIN is 17 characters; I, O and Q are excluded from the alphabet by the
 # standard, which is what keeps this from matching ordinary hex or base64 runs.
-_VIN = re.compile(r"(?<![A-HJ-NPR-Z0-9])([A-HJ-NPR-Z]{3}[A-HJ-NPR-Z0-9]{14})(?![A-HJ-NPR-Z0-9])")
+# Position 3 of a WMI may be a DIGIT (ISO 3779), and four of the eleven
+# prefixes below are exactly that shape: WP0 (Porsche), WF0, WV1 and WV2.
+# Requiring three letters here made all four structurally unreachable — the
+# guard could not see a Porsche VIN at all, while claiming to refuse any
+# VIN-shaped literal without a visible mark of being made up. Only the first
+# two characters are letters in every prefix this project cares about, and
+# the _WMI filter in scan() does the narrowing straight after the match, so
+# widening here cannot add a reported false positive.
+_VIN = re.compile(r"(?<![A-HJ-NPR-Z0-9])([A-HJ-NPR-Z]{2}[A-HJ-NPR-Z0-9]{15})(?![A-HJ-NPR-Z0-9])")
 
 # Only these world-manufacturer prefixes concern this project. Narrowing to them
 # keeps the check from firing on unrelated 17-character identifiers.
