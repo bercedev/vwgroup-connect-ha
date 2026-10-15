@@ -5434,10 +5434,18 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         # Vehicle model name (e.g. "ID.4") makes the GitHub issue recognizable
         # at a glance and doubles as the maintainer's private per-model stat.
         # This goes into a PUBLIC issue title, so it must stay a *generic*
-        # designation. The owner-set vehicle nickname is person-typed and is
-        # deliberately kept out of the model slot upstream (api/vw_eu.py
-        # _pick_model); _safe_model is the backstop that drops a VIN-shaped
-        # value. VIN stays masked. Entries are typically one car; pick the
+        # designation. The owner-set nickname is person-typed and is kept out of
+        # the model slot upstream for VW and Audi (api/vw_eu.py _pick_model).
+        #
+        # That is NOT yet true for every brand, and this loop is brand-agnostic:
+        # api/skoda_official.py assigns ``d.model = v.get("name")``, and that
+        # endpoint's own documented behaviour (docs/research/skoda-official-api.md)
+        # is to return the user-defined vehicle name there and fall back to the
+        # model only when the owner never named the car. The field is ambiguous
+        # at source, so splitting it is a behaviour decision about device naming
+        # rather than a filter, and it is deliberately not made here.
+        # _safe_model remains the backstop and drops a VIN-shaped value.
+        # VIN stays masked. Entries are typically one car; pick the
         # first vehicle that carries a model name.
         model: str | None = None
         for vdata in getattr(self, "vehicles", {}).values():

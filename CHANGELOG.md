@@ -194,7 +194,7 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **One entity per value (breaking only on a Volkswagen Companion entry with Read-only Mode off, the one place these removals happen):**
   - The read-only sensor and binary sensor that repeated a control's value are removed. This covers climate at unlock, window heating, the zones, climatisation, charging, charge target and the departure timers.
   - The app's own target temperature and start mode readings are shown by the climate entity (gszigethy/vwgroup-connect-ha#65, gszigethy/vwgroup-connect-ha#103).
-  - Climate runs from the climate entity alone: use its on/off instead of a climate switch. No release since v2.26.0 put that switch on a Companion entry, so upgrading from v4.11.0, v4.12.0 or v4.13.0 loses nothing; setup only clears a registry entry left by v2.25.0, the one release that did create it (gszigethy/vwgroup-connect-ha#103).
+  - Climate runs from the climate entity alone: use its on/off instead of a climate switch. No 4.x release created that switch on a Companion entry, so no 4.x upgrade loses one — setup only clears a leftover registry entry from the single much older release that did (gszigethy/vwgroup-connect-ha#103). Entities ARE removed by this group; the bullets above say which.
 - **Cloud-only diagnostics removed from companion entries:** push event, API observer findings and wake count today (gszigethy/vwgroup-connect-ha#66).
 - **Data source label:** shows the companion transport (`companion_adb`) instead of "Volkswagen EU (WeConnect ID)" (gszigethy/vwgroup-connect-ha#67).
 - **Companion entity ids carry "adb"** (for example `sensor.tiguan_adb_battery_level`, named "Tiguan Battery Level"), so companion and EU Data Act entities can be told apart. Existing entity ids are unchanged (gszigethy/vwgroup-connect-ha#68, gszigethy/vwgroup-connect-ha#81).
@@ -468,7 +468,7 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **Diagnostics:** the add-on token, the agent token and the phone's host address are redacted.
 - **Screen dumps:** a dump that contains an XML DOCTYPE or ENTITY declaration is refused before it is parsed (gszigethy/vwgroup-connect-ha#57).
 - **Vehicle identification numbers:** CI refuses a VIN-shaped literal in the repository that carries no visible mark of being made up.
-- **The name you give your car in the brand's app is kept out of the model field.** It is shown as the vehicle nickname instead, which a diagnostics download redacts. On a new setup the device is named after the model; entity IDs that already exist are not renamed.
+- **The name you give your car in the brand's app is kept out of the model field.** For VW and Audi it is shown as the vehicle nickname instead, which a diagnostics download redacts. Entity IDs that already exist are not renamed. On a NEW setup the device is named after the model — and where the brand's garage entry carries only your name and no model, the device falls back to the brand plus the last six characters of the VIN, so a new entry can read "Volkswagen 1234AB" where it would previously have read your own wording.
 - **Vehicle Data Scout:** the masking that prepares a sample value for a public
   issue now covers another of the encodings the portal uses, so an encoded field
   is replaced by a note about its kind and size rather than shortened. Reported
