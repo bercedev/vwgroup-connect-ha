@@ -30,7 +30,13 @@ def _coord(readers_return):
 def test_persist_runs_after_a_successful_supplementary_read(monkeypatch):
     from custom_components.vag_connect.cariad import _channel_merge as cm
 
-    async def _fake_gather(name, primary, suppliers, preferred=None):
+    # #1827 — **kwargs rather than naming each parameter: this fake broke when
+    # gather_and_merge gained an ``outcomes`` sink, and it broke INVISIBLY,
+    # because the coordinator wraps that call in a broad except that logs at
+    # DEBUG and falls back to the primary. A TypeError from a signature change
+    # then looks exactly like a channel outage. Tolerating extra keywords keeps
+    # this test about what it is for (persist runs after a supplementary read).
+    async def _fake_gather(name, primary, suppliers, **_kw):
         return primary  # a real read here would rotate the cookie jar
 
     monkeypatch.setattr(cm, "gather_and_merge", _fake_gather)
@@ -58,7 +64,13 @@ def test_persist_still_runs_is_guarded_idempotent(monkeypatch):
     # equality no-op is covered by the _persist_supplementary_cookies unit tests.
     from custom_components.vag_connect.cariad import _channel_merge as cm
 
-    async def _fake_gather(name, primary, suppliers, preferred=None):
+    # #1827 — **kwargs rather than naming each parameter: this fake broke when
+    # gather_and_merge gained an ``outcomes`` sink, and it broke INVISIBLY,
+    # because the coordinator wraps that call in a broad except that logs at
+    # DEBUG and falls back to the primary. A TypeError from a signature change
+    # then looks exactly like a channel outage. Tolerating extra keywords keeps
+    # this test about what it is for (persist runs after a supplementary read).
+    async def _fake_gather(name, primary, suppliers, **_kw):
         return primary
 
     monkeypatch.setattr(cm, "gather_and_merge", _fake_gather)

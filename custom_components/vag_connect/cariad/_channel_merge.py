@@ -410,11 +410,26 @@ def _merge_drivetrain(
         setattr(merged, name, value)
 
 
+def _record(sink: dict[str, str] | None, channel: str, label: str) -> None:
+    """Write a PII-free per-channel outcome into the diagnostics sink.
+
+    Mirrors how this project already surfaces this class of thing (see the
+    coordinator's ``_skoda_probe``): a short label under a stable key, no-op when
+    there is no sink, so every existing caller is unaffected. Namespaced
+    ``channel:`` because ``probe_outcomes`` otherwise holds per-READ entries, and
+    the distinction between "this read walled" and "this whole channel dropped
+    out" is the one #1827 needed and could not make.
+    """
+    if sink is not None:
+        sink[f"channel:{channel}"] = label
+
+
 async def gather_and_merge(
     primary_name: str,
     primary: "VehicleData",
     suppliers: list[tuple[str, Awaitable["VehicleData | None"]]],
     preferred: str | None = None,
+    outcomes: dict[str, str] | None = None,
 ) -> "VehicleData":
     """Read supplementary channels concurrently and merge them onto ``primary``.
 
@@ -434,14 +449,72 @@ async def gather_and_merge(
         *(awaitable for _name, awaitable in suppliers),
         return_exceptions=True,
     )
+    # #1827 — this poll's channel set has to be EXCLUSIVE, not cumulative. A
+    # channel that stops being offered at all — switched off, or its arming
+    # failed so it never reaches ``suppliers`` — would otherwise leave its last
+    # label standing for the life of the client, because ``probe_outcomes`` is
+    # never cleared: the two ``= {}`` sites on it are lazy-init guards for
+    # ``__new__``-built doubles, followed by ``.update()``
+    # (api/base.py:620-624, api/porsche.py:486-487). A stale ``ok`` next to a
+    # channel that is not even being attempted is worse than no label — it is
+    # exactly the "an entry here does not date a poll" trap this change exists
+    # to close, and leaving it would have planted a fresh one. Dropping the
+    # namespace converts that false claim into an absence, and absence already
+    # reads as "not attempted" under this scheme.
+    #
+    # Only ``channel:`` is dropped; the per-READ entries beside it belong to the
+    # connector and are merged up separately. Consequence worth naming: the sink
+    # is not VIN-namespaced (no key in it is), so on an entry with several cars
+    # the labels describe the car merged last rather than all of them.
+    #
+    # Re-checked after the vw.de sole-mode path stopped REBINDING the sink
+    # (vw_eu.py used to do ``self.probe_outcomes = dict(getattr(web, ...))`` on
+    # every ``get_status``). That rebind was not a second mechanism for this job
+    # and removing it does not make this one redundant — it reached exactly one
+    # brand's one mode, it dropped the per-read entries along with the labels,
+    # and it ran at a moment that has nothing to do with the channel set. On every
+    # other primary — BFF, MBB, the EU-DP portal, Porsche, Škoda, companion — the
+    # sink has only ever been created once and mutated in place, so this clearing
+    # was already the only thing keeping a dropped channel's last label from
+    # standing for the life of the client. It is now the only one on the vw.de
+    # path too.
+    #
+    # Known gap, deliberately not papered over here: this sweep cannot run for an
+    # entry whose LAST supplementary channel is switched off, because the
+    # coordinator returns at coordinator.py:4152-4157 (``if not suppliers``)
+    # before calling this function at all. Moving the sweep ahead of this
+    # function's own ``if not suppliers`` return (above) would not help for the
+    # same reason: the function is never entered. Such an entry keeps its final
+    # labels; closing that needs a clear on the coordinator's early-return path,
+    # which is its own change.
+    if outcomes is not None:
+        for _stale in [k for k in outcomes if k.startswith("channel:")]:
+            del outcomes[_stale]
+
     sources: list[tuple[str, "VehicleData"]] = [(primary_name, primary)]
     for (name, _awaitable), res in zip(suppliers, results):
         if isinstance(res, BaseException):
+            # #1827 — the skip itself used to be DEBUG-only, and that made a real
+            # report undecidable: a stale batch value and a skipped live channel
+            # produce the same download, because when every supplier is skipped
+            # the ``len(sources) == 1`` return below hands back the primary and
+            # the live-supersede rule never runs. Record it so the next person to
+            # hit this answers the question by attaching a file instead of being
+            # asked to turn on debug logging first (the #1712 lesson).
+            #
+            # TYPE only, never str(res): a message on this path can carry the
+            # request URL, and on the authproxy path that URL has carried tokens.
+            _record(outcomes, name, f"failed:{type(res).__name__}")
             _LOGGER.debug("supplementary channel %s failed, skipped: %s",
                           name, type(res).__name__)
             continue
-        if res is not None:
-            sources.append((name, res))
+        if res is None:
+            # Distinct from a failure on purpose: "ran and had nothing" and "fell
+            # over" are exactly the two cases #1827 could not tell apart.
+            _record(outcomes, name, "no_data")
+            continue
+        _record(outcomes, name, "ok")
+        sources.append((name, res))
     if len(sources) == 1:
         return primary
     # #1357 — per-VIN read priority. The per-field winner is the ORDER of this

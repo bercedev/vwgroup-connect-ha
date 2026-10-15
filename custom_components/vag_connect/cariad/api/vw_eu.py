@@ -877,8 +877,28 @@ class VWEUClient(CariadBaseClient):
             # otherwise a vw.de reporter's diagnostics carries no raw data to
             # ground the location / auth issues (#923 / #966).
             self.last_raw_responses = dict(getattr(web, "last_raw_responses", {}))
-            # #923/#1157 — surface the sole-mode probe outcomes too.
-            self.probe_outcomes = dict(getattr(web, "probe_outcomes", {}))
+            # #923/#1157 — surface the sole-mode probe outcomes too. Merged in
+            # place, NOT rebound: the line above may replace
+            # ``last_raw_responses`` because that one is re-populated per poll by
+            # design (base.py:282), but ``probe_outcomes`` is a long-lived sink
+            # that other code writes into — #1827's per-channel labels come from
+            # ``gather_and_merge`` by way of the coordinator, which runs AFTER
+            # every ``get_status`` in the same poll (coordinator.py:4620 before
+            # :4777; :4436 before :4465 at setup). Rebinding here dropped the
+            # previous poll's labels at the start of the next one and left the
+            # download with no channel lines for the whole window in between,
+            # which under that scheme reads as "not attempted". The proxy never
+            # writes a ``channel:`` key itself — only ``_record`` does — so there
+            # was nothing in the fresh copy to put them back. ``.update()`` is
+            # also what every other path already does with a connector's outcomes
+            # (base.py:624); this was the only unconditional rebind in the tree.
+            # Lazy-init guarded the same way base.py:622 does it, because this
+            # client is built via ``__new__`` without ``__init__`` throughout the
+            # suite (see the note at :430) — the attribute can be absent, and a
+            # bare ``.update()`` would raise where the old rebind quietly worked.
+            if not isinstance(getattr(self, "probe_outcomes", None), dict):
+                self.probe_outcomes = {}
+            self.probe_outcomes.update(getattr(web, "probe_outcomes", None) or {})
             return web_data
 
         # v2.12.0 — EU Data Act portal mode (read-only fallback). When the
