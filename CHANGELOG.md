@@ -13,6 +13,11 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## Semver-Regeln für dieses Projekt (pre-1.0.0)
 
+> **Historisch — nicht für neue Releases.** Das Projekt ist seit v1.0.0 auf
+> strikter Semver; maßgeblich ist die Tabelle in `RELEASE_PROCESS.md`, wo ein
+> Breaking Change MAJOR ist und nicht MINOR. Die Tabelle hier beschreibt nur,
+> wie die Versionen vor v1.0.0 vergeben wurden.
+
 | Was | Version | Beispiel |
 |---|---|---|
 | Breaking Change, Architekturwechsel | `0.MINOR.0` | 0.10.0 → 0.11.0 |
@@ -40,6 +45,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 > jeder geänderten Datei, jeder Issue-Referenz und der Methodik dahinter.
 
 ## [Unreleased]
+
+
+## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
 
 - **Volkswagen Companion (ADB): VW app 4.6.4 mapping, controls, more reads and safety gates.** Developed against a Tiguan eHybrid (reads verified on the car) in [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha) (fork releases 4.11.0-1 to 4.13.0-4, plus the fixes from this PR's review; PR numbers below refer to that repository). Thanks @gszigethy; app captures from @plainmad (Mk8 Golf GTE), @kgroshert (ID.4, e-up!) and @WEZANGO (CUPRA Born) ([#968](https://github.com/its-me-prash/vwgroup-connect-ha/issues/968)). Functional and technical design: [docs/COMPANION.md](docs/COMPANION.md).
 
