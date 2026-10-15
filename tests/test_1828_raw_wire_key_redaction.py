@@ -23,10 +23,15 @@ scrubber ran and that this key walked past it. He had hand-edited other fields
 out of the same block and did not notice this one, which is the whole argument
 for fixing it in the scrubber rather than in the instructions.
 
-The same wire key is read on three more paths (``cariad/_authproxy.py``,
-``cariad/api/seat_cupra.py``, ``cariad/api/vw_na.py``), and the North America one
-spells it ``vehicleNickName`` with a capital N — which lowercases to the same
-thing, so one entry covers both.
+Counted rather than estimated, because the first version of this note said
+"three more paths" and named three files: the same wire key is read at five
+places in four files — ``cariad/_authproxy.py``:651 and :688,
+``cariad/api/seat_cupra.py``:416, ``cariad/auth/_eu_data_act.py``:6845, and
+``cariad/api/vw_na.py``:726, which spells it ``vehicleNickName`` with a capital
+N. All five lowercase to the same thing, so one entry covers them. A sixth
+reader, ``cariad/api/vw_eu.py``:557, uses a shorter spelling that lowercases to
+something else and needs its own entry — see
+tests/test_1832_render_url_spellings.py.
 
 Deliberately NOT added here: a bare ``url``. It would match the structural
 grounding data the raw export exists for, and the raw export's whole purpose is
@@ -126,10 +131,16 @@ class TestTheReportersOwnTwoItems:
         out = _scrub_raw({"dealerId": "DE-12345"})
         assert out["dealerId"] == "**REDACTED**"
 
-    def test_images_is_specific_enough_to_be_safe_as_a_key(self):
-        """Counter-check on the decision: `images` is read in exactly one place
-        in the integration, so redacting it by key cannot swallow some unrelated
-        harmless container the way a bare `url` would."""
+    def test_the_images_entry_is_registered_and_other_containers_are_left_alone(self):
+        """Two different things, renamed so neither is read as the other.
+
+        The membership assertion goes red if the `images` entry is removed. The
+        `batteryStatus` assertion does not: both of its keys are in neither
+        redaction set, so it passes with or without that entry. It is a liveness
+        check on the walker, NOT evidence for the key choice — which is what the
+        old name for this test claimed. The choice rests on reading the one place
+        `images` is parsed (cariad/_authproxy.py:868), and no assertion over
+        these two unrelated keys can show that."""
         assert "images" in _RAW_REDACT_KEYS
         out = _scrub_raw({"batteryStatus": {"currentSOC_pct": 35}})
         assert out["batteryStatus"]["currentSOC_pct"] == 35

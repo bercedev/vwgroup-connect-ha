@@ -388,33 +388,11 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Sicherheit / Security
 
-- **The diagnostics download masks two more things: your vehicle's nickname, and the
-  parking-position map links.** Both are about what ends up in a file people attach to public
-  issues; nothing about the integration's behaviour changes and no sensor is affected.
-
-  The nickname is the one that matters. A name you chose for your car was being written out in
-  full in the raw-payload section of the diagnostics, for anyone on the `volkswagen.de` channel.
-  Our own field name for it was masked and so was the short form some backends send, but the
-  spelling that actually arrives on the wire matched neither, and it is a free-text name, so
-  none of the pattern-based masking caught it either. It is masked now, in every spelling we
-  know of, including the different one used in North America. Thank you to @Fishermanjb, whose
-  report of a neighbouring problem is what led here.
-
-  The map links are the smaller half: the two map images of where the car is parked are masked
-  now, the same as the parking address, the city and the coordinates already were.
-
-  Also masked, and these are the two @Fishermanjb actually reported: the vehicle render image
-  links, and the dealer id. The render links were already masked under the name the integration
-  uses internally, with the note that they encode the exact model, colour and configuration —
-  but the two shapes the backend sends them in walked past that, so masking one spelling and
-  not the others protected nothing. The dealer id is not your data, but as he put it, it is
-  "often in the area of the user", which makes it the same kind of thing as the parking city.
-
-  One item from his report is deliberately left alone: the model name and specification list
-  are payload size, not privacy. Masking them would imply they were sensitive. And nothing
-  called simply a URL is masked wholesale, because that would remove the payload shapes that
-  make the raw section useful for mapping a new field in the first place — the two image cases
-  are taken by their container names instead.
+- **Diagnostics redaction hardening.** An internal review pass widened what the diagnostics
+  download masks before you attach it to an issue, in both the per-vehicle and the raw-payload
+  section — nothing about the integration's behaviour changes, no sensor is affected, and the
+  structure that makes a raw capture useful for mapping a new field is kept. Thanks
+  @Fishermanjb for the review pass that started it.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.
