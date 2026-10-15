@@ -64,6 +64,17 @@ from .cariad.models import VehicleData
 _LOGGER = logging.getLogger(__name__)
 
 
+def _portal_scraper_session(client: Any, shared: Any) -> Any:
+    """The session that holds this entry's portal cookies.
+
+    Since #1793 the portal logs in on a jar-isolated per-entry session, so the
+    scraper must ride that one. On the shared session it carried no portal
+    cookie after a restart, every kickoff check answered 401 and the
+    session-expired repair opened on each startup.
+    """
+    return getattr(client, "_portal_session", None) or shared
+
+
 def _age_s(raw: Any) -> float | None:
     """Seconds since ``raw`` (datetime or ISO string), or None. (#1688)
 
@@ -2501,7 +2512,9 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             async_get_clientsession,
         )
 
-        session = async_get_clientsession(self.hass)
+        session = _portal_scraper_session(
+            getattr(self, "_cariad_client", None), async_get_clientsession(self.hass)
+        )
         brand = self.entry.data[CONF_BRAND]
         scraper = DataActScraper(session, brand_name=brand)
 
@@ -2681,7 +2694,9 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="historical_disabled",
             )
-        session = async_get_clientsession(self.hass)
+        session = _portal_scraper_session(
+            getattr(self, "_cariad_client", None), async_get_clientsession(self.hass)
+        )
         scraper = DataActScraper(session, brand_name=self.entry.data[CONF_BRAND])
         try:
             # Wedge-guard (#923, @naked-head — field-corrected). The portal
