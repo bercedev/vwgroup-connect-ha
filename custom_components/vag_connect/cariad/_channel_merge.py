@@ -449,6 +449,27 @@ async def gather_and_merge(
         *(awaitable for _name, awaitable in suppliers),
         return_exceptions=True,
     )
+    # #1827 — this poll's channel set has to be EXCLUSIVE, not cumulative. A
+    # channel that stops being offered at all — switched off, or its arming
+    # failed so it never reaches ``suppliers`` — would otherwise leave its last
+    # label standing for the life of the client, because ``probe_outcomes`` is
+    # never cleared: the two ``= {}`` sites on it are lazy-init guards for
+    # ``__new__``-built doubles, followed by ``.update()``
+    # (api/base.py:620-624, api/porsche.py:486-487). A stale ``ok`` next to a
+    # channel that is not even being attempted is worse than no label — it is
+    # exactly the "an entry here does not date a poll" trap this change exists
+    # to close, and leaving it would have planted a fresh one. Dropping the
+    # namespace converts that false claim into an absence, and absence already
+    # reads as "not attempted" under this scheme.
+    #
+    # Only ``channel:`` is dropped; the per-READ entries beside it belong to the
+    # connector and are merged up separately. Consequence worth naming: the sink
+    # is not VIN-namespaced (no key in it is), so on an entry with several cars
+    # the labels describe the car merged last rather than all of them.
+    if outcomes is not None:
+        for _stale in [k for k in outcomes if k.startswith("channel:")]:
+            del outcomes[_stale]
+
     sources: list[tuple[str, "VehicleData"]] = [(primary_name, primary)]
     for (name, _awaitable), res in zip(suppliers, results):
         if isinstance(res, BaseException):

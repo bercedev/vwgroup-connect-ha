@@ -152,6 +152,89 @@ class TestTheMergeItselfIsUnchanged:
         assert merged is primary
 
 
+class TestTheLabelSetDescribesThisPollOnly:
+    """The labels must be exclusive, or they repeat the trap they close.
+
+    ``probe_outcomes`` is never cleared — its two ``= {}`` sites are lazy-init
+    guards for ``__new__``-built doubles followed by ``.update()``
+    (api/base.py:620-624, api/porsche.py:486-487). So a cumulative label set
+    would keep asserting ``ok`` for a channel that has since stopped being
+    offered at all, which is the same "an entry here does not date a poll"
+    mistake that made #1827 hard to read in the first place.
+    """
+
+    def test_a_channel_no_longer_offered_loses_its_label(self):
+        sink: dict[str, str] = {}
+        # poll 1 — both channels present, one delivers
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(battery_soc=19),
+            [("website_authproxy", _returns(_vd(battery_soc=35))),
+             ("mbb", _returns(None))],
+            outcomes=sink,
+        ))
+        assert sink["channel:website_authproxy"] == "ok"
+        assert sink["channel:mbb"] == "no_data"
+
+        # poll 2 — vw.de was switched off, so it never reaches ``suppliers``
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(battery_soc=19),
+            [("mbb", _returns(None))],
+            outcomes=sink,
+        ))
+        assert "channel:website_authproxy" not in sink, (
+            "a channel that is not being attempted must not still claim an outcome"
+        )
+        assert sink["channel:mbb"] == "no_data"
+
+    def test_a_label_that_changed_is_replaced_not_accumulated(self):
+        sink: dict[str, str] = {}
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(),
+            [("website_authproxy", _returns(_vd(battery_soc=35)))],
+            outcomes=sink,
+        ))
+        assert sink["channel:website_authproxy"] == "ok"
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(),
+            [("website_authproxy", _raises(TimeoutError("x")))],
+            outcomes=sink,
+        ))
+        assert sink["channel:website_authproxy"] == "failed:TimeoutError"
+        assert len([k for k in sink if k.startswith("channel:")]) == 1
+
+    def test_the_per_read_entries_beside_it_are_left_alone(self):
+        """Only the ``channel:`` namespace is this function's to manage; the
+        per-read outcomes belong to the connector and are merged up elsewhere."""
+        sink = {"vwde_charging": "200", "vwde_core_read:relations": "401"}
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(),
+            [("website_authproxy", _returns(_vd(battery_soc=35)))],
+            outcomes=sink,
+        ))
+        assert sink["vwde_charging"] == "200"
+        assert sink["vwde_core_read:relations"] == "401"
+        assert sink["channel:website_authproxy"] == "ok"
+
+    def test_the_sweep_runs_even_when_every_supplier_is_skipped(self):
+        """The clearing sits before the loop and the loop before the
+        ``len(sources) == 1`` short-circuit, so the all-skipped poll — the case
+        that produced the reporter's download — still ends up with an accurate
+        set rather than the previous poll's."""
+        sink: dict[str, str] = {}
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(),
+            [("website_authproxy", _returns(_vd(battery_soc=35)))],
+            outcomes=sink,
+        ))
+        assert sink["channel:website_authproxy"] == "ok"
+        asyncio.run(gather_and_merge(
+            "eu_data_act", _vd(),
+            [("website_authproxy", _returns(None))],
+            outcomes=sink,
+        ))
+        assert sink["channel:website_authproxy"] == "no_data"
+
+
 class TestTheCallerWiresItUp:
     """#584's lesson: a sink that nothing writes to passes its own test forever.
     The coordinator has to actually pass the client's probe_outcomes."""
