@@ -9,7 +9,7 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 > 📖 **Bi-lingual convention (v1.12.3 → v2.4.0 — DE-primary)**: section-titles were **DE / EN** joined by ` / ` and body content was German-only. Past entries are preserved as-is for historical accuracy.
 >
-> 📖 **Bi-lingual convention (v2.4.1+ — EN-primary, switched 2026-05-23)**: section-titles are now **EN / DE** joined by ` / `, body content is **English-primary** with German callouts where the original context was DACH-specific (Facebook-group threads, German tester names, brand-specific German terminology). The project's GitHub audience + the new "VW Group Connect" branding both lean international — English-primary makes the changelog readable for non-DACH users while keeping the DACH community's voice visible. Translations of individual body texts are available on request via [`docs/CHANGELOG_TECHNICAL.md`](docs/CHANGELOG_TECHNICAL.md) — same pattern.
+> 📖 **Bi-lingual convention (v2.4.1+ — EN-primary, switched 2026-05-23)**: section-titles are now **EN / DE** joined by ` / `, body content is **English-primary** with German callouts where the original context was DACH-specific (Facebook-group threads, German tester names, brand-specific German terminology). The project's GitHub audience + the new "VW Group Connect" branding both lean international — English-primary makes the changelog readable for non-DACH users while keeping the DACH community's voice visible. Ask in an issue if you need a particular entry translated.
 
 ## Semver-Regeln für dieses Projekt (pre-1.0.0)
 
@@ -35,10 +35,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ---
 
-> 💡 **Für Entwickler / Contributors:** Vollständige technische Detail-Notes
-> für v1.8.6+ findest du in [`docs/CHANGELOG_TECHNICAL.md`](docs/CHANGELOG_TECHNICAL.md)
-> — mit jeder geänderten Datei, jeder Zeile, jeder Issue-Referenz und der
-> Methodik dahinter.
+> 💡 **Für Entwickler / Contributors:** Die technischen Detail-Notes stehen
+> in den Commit-Messages und Pull-Request-Bodies des jeweiligen Release — mit
+> jeder geänderten Datei, jeder Issue-Referenz und der Methodik dahinter.
 
 ## [Unreleased]
 
@@ -193,6 +192,10 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **Companion entity ids carry "adb"** (for example `sensor.tiguan_adb_battery_level`, named "Tiguan Battery Level"), so companion and EU Data Act entities can be told apart. Existing entity ids are unchanged (gszigethy/vwgroup-connect-ha#68, gszigethy/vwgroup-connect-ha#81).
 - **The vehicle sync warning is translated.** The note that each sync wakes the car appears in every supported language.
 - **Relay errors are reported only as fixed codes**, never as free text from the phone.
+- **Release documentation corrected** (`RELEASE_PROCESS.md` and the CI prose):
+  the prescribed changelog heading format was one no parser accepts, the
+  coverage gate was quoted with stale values in three places, and eight links
+  pointed at a file that no longer exists.
 
 ### Behoben / Fixed
 

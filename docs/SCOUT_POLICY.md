@@ -140,7 +140,8 @@ Or — if intentionally exempt — add an inline comment citing the exemption ru
 
 1. **CI lint script** (planned for v2.5.0): walks `EXPECTED_KEYS`, cross-checks against parser presence, fails on uncommented silencer-only entries
 2. **PR-review checklist** (above) — manual reviewer responsibility
-3. **`docs/CHANGELOG_TECHNICAL.md`** documents the audit history per release
+3. **[Migration history](#migration-history)** below records the audit outcome
+   per release
 
 ---
 
