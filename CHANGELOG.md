@@ -184,10 +184,10 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **Reloads:** a reload waits for a running walk to finish (gszigethy/vwgroup-connect-ha#60). Wake/sleep and close-app options apply without a reload (gszigethy/vwgroup-connect-ha#59).
 - **App prompts:** the Google Maps consent is accepted only during the parking read (gszigethy/vwgroup-connect-ha#56). The app's rating prompt is closed with BACK, never answered (gszigethy/vwgroup-connect-ha#29).
 - **App string table:** fetched only when the app version changes. Without it, commands and sync are refused unless the UI language can be confirmed (gszigethy/vwgroup-connect-ha#58).
-- **One entity per value (breaking for automations that use the removed sensors):**
+- **One entity per value (breaking only on a Volkswagen Companion entry with Read-only Mode off, the one place these removals happen):**
   - The read-only sensor and binary sensor that repeated a control's value are removed. This covers climate at unlock, window heating, the zones, climatisation, charging, charge target and the departure timers.
   - The app's own target temperature and start mode readings are shown by the climate entity (gszigethy/vwgroup-connect-ha#65, gszigethy/vwgroup-connect-ha#103).
-  - Climate runs from the climate entity alone. The climate switch is no longer created on companion entries; use the climate entity's on/off. Its registry entry is removed at setup (gszigethy/vwgroup-connect-ha#103).
+  - Climate runs from the climate entity alone: use its on/off instead of a climate switch. No release since v2.26.0 put that switch on a Companion entry, so upgrading from v4.11.0, v4.12.0 or v4.13.0 loses nothing; setup only clears a registry entry left by v2.25.0, the one release that did create it (gszigethy/vwgroup-connect-ha#103).
 - **Cloud-only diagnostics removed from companion entries:** push event, API observer findings and wake count today (gszigethy/vwgroup-connect-ha#66).
 - **Data source label:** shows the companion transport (`companion_adb`) instead of "Volkswagen EU (WeConnect ID)" (gszigethy/vwgroup-connect-ha#67).
 - **Companion entity ids carry "adb"** (for example `sensor.tiguan_adb_battery_level`, named "Tiguan Battery Level"), so companion and EU Data Act entities can be told apart. Existing entity ids are unchanged (gszigethy/vwgroup-connect-ha#68, gszigethy/vwgroup-connect-ha#81).
