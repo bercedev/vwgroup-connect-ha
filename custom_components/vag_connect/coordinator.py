@@ -5428,8 +5428,12 @@ class VagConnectCoordinator(DataUpdateCoordinator):
 
         # Vehicle model name (e.g. "ID.4") makes the GitHub issue recognizable
         # at a glance and doubles as the maintainer's private per-model stat.
-        # NOT PII (generic), VIN stays masked. Entries are typically one car;
-        # pick the first vehicle that carries a model name.
+        # This goes into a PUBLIC issue title, so it must stay a *generic*
+        # designation. The owner-set vehicle nickname is person-typed and is
+        # deliberately kept out of the model slot upstream (api/vw_eu.py
+        # _pick_model); _safe_model is the backstop that drops a VIN-shaped
+        # value. VIN stays masked. Entries are typically one car; pick the
+        # first vehicle that carries a model name.
         model: str | None = None
         for vdata in getattr(self, "vehicles", {}).values():
             if isinstance(vdata, dict):
