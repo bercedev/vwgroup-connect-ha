@@ -71,6 +71,13 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   command Porsche went on to reject looked exactly like one it performed.
   @tp9csmv79n-code found the cause and verified the fix before filing
   ([#1853](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1853)).
+- **The "EU Data Act portal session expired" repair no longer opens after every restart.**
+  The session had not expired. Since each entry got its own portal cookie jar (#1793), the
+  startup check for the continuous data request, and the one-time export, still went out on
+  Home Assistant's shared session. After a restart that session has no portal cookies, so
+  the portal answered 401 and the repair asked you to sign in again, only for it to come
+  back on the next restart. Both now use the entry's own portal session. Thanks @gszigethy.
+
 
 
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
