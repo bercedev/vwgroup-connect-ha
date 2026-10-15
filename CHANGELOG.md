@@ -218,6 +218,29 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   when a read is attempted and stay put when it is not, so a reading there cannot be dated from the
   file. One exception, so you are not misled by it: if you switch off the *last* of your extra read
   channels, that final set of per-channel lines stays in the file until the integration restarts.
+- **The "sign in again" notice no longer sends an Audi owner to a door the manufacturer
+  locked.** When a passwordless entry's session expires, the notice told everyone to choose
+  Reauthenticate and scan the sign-in code again. For Audi that cannot work: Volkswagen
+  switched off the app sign-in that brand used, so the code sign-in refuses to start and the
+  reauth lands on a banner saying so. @ratclma reported hitting exactly that, after following
+  this advice from us, which is how it was found.
+
+  The sign-in prompt now reads the brand and the kind of sign-in the entry actually stored.
+  Where the code sign-in still works it hands off to it as before. Where the manufacturer
+  retired it, the prompt asks for your email address and password instead, and attaches them to
+  the existing entry, so its history, its settings, its entity names and any extra channels you
+  had set up all survive. The email field is deliberately left empty: these entries store an
+  internal account identifier rather than an address, and a pre-filled box would invite you to
+  type only a password, which is the one thing that cannot work.
+
+  This is fixed in the sign-in prompt rather than in the repair notice on purpose. Home
+  Assistant opens that prompt by itself whenever the session has expired, so a notice pointing
+  elsewhere would have left the dead end reachable without you clicking anything.
+
+  Two further defects in the same notice went with it: its title said "VW Group" instead of
+  naming the brand, and although it told you to go and do something, it offered no Repair button
+  at all. Both notices have one now
+  ([#1813](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1813)).
 
 - **A car whose service list comes from the read-only host keeps its remote commands blocked
   even right after a restart.** That block was already there and already correct, but it was
