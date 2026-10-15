@@ -82,6 +82,11 @@ def _conn(*, master_age_s: float | None = None) -> WebsiteAuthProxyConnector:
     c._should_probe_position = MagicMock(return_value=False)
     c._should_probe_soh = MagicMock(return_value=False)
     c._should_probe_measurements = MagicMock(return_value=False)
+    # The position probe's own budget counters. Set because one test below turns
+    # that probe on to observe a read AFTER the enrich block, and ``__new__``
+    # skips ``__init__`` where these live (_website_authproxy.py:849-850).
+    c._position_probe_tries = 0
+    c._position_available = False
     return c
 
 
@@ -91,16 +96,21 @@ def _reads(**bodies: Any):
     Anything named in *bodies* answers with that value; every other core read
     walls. Keyed on the label rather than on call order so adding a read to the
     connector cannot silently re-point an assertion at a different endpoint.
+    Every label asked for is recorded on ``.seen``, so a test can assert that a
+    read was REACHED rather than only that its value arrived.
     """
+    seen: list[str] = []
 
     async def _side(*_a: Any, **kw: Any) -> Any:
         label = kw.get("record_as") or ""
+        seen.append(label)
         if label in bodies:
             return bodies[label]
-        if label in _TAIL_LABELS:
-            return None  # tail read soft-failed
+        if label in _TAIL_LABELS or kw.get("optional"):
+            return None  # a tail read, or an optional probe, soft-failed
         raise AuthenticationError(f"{label} -> HTTP 401")
 
+    _side.seen = seen  # type: ignore[attr-defined]
     return _side
 
 
@@ -207,3 +217,154 @@ class TestARelationsWallNoLongerCostsTheOtherReads:
         with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
             asyncio.run(c.get_vehicle_data(VIN))
         assert "vwde_core_read:relations" not in c.probe_outcomes
+
+
+class TestTheWalledReadIsNotFiredAgainDownstream:
+    """The softening has to stop the unwind, not move it ten lines later.
+
+    The nickname/plate enrich falls back to the SINGULAR relation detail when
+    the list did not carry this VIN. That fallback calls ``_ensure_backend``,
+    whose only source for the platform is ``get_relations`` — the read that just
+    walled. So after the softening it fired the identical request for a
+    guaranteed second 401 and re-raised, unwinding past the cohort-gated
+    position, SoH and measurements probes. The unwind is the thing the softening
+    exists to stop, so skipping the fallback belongs to the same fix.
+
+    Worth recording how this was missed: the first version of this file mocks
+    ``get_relation_detail`` to return None in ``_conn``, and that is precisely
+    the call that makes the second request. Mocking the path under test is how
+    the two older regression tests stayed green over the cache hole this file
+    opens with, and it happened here one function later.
+    """
+
+    def test_the_singular_fallback_is_skipped_after_an_auth_wall(self) -> None:
+        c = _conn(master_age_s=100.0)
+        c.get_relations = AsyncMock(
+            side_effect=AuthenticationError("relations -> HTTP 401"),
+        )
+        c._get_json = AsyncMock(side_effect=_reads(
+            vwde_charging={"data": {"batteryStatus": {}}},
+        ))
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert c.get_relation_detail.await_count == 0, (
+            "the fallback reads the endpoint that just walled"
+        )
+
+    def test_the_reads_after_the_enrich_are_still_reached(self) -> None:
+        """The point of not re-firing it: the rest of the block still runs. The
+        position probe sits after the enrich and is the nearest observable one,
+        so it stands in for everything downstream of it."""
+        c = _conn(master_age_s=100.0)
+        c._should_probe_position = MagicMock(return_value=True)
+        c.get_relations = AsyncMock(
+            side_effect=AuthenticationError("relations -> HTTP 401"),
+        )
+        side = _reads(vwde_charging={"data": {"batteryStatus": {}}})
+        c._get_json = AsyncMock(side_effect=side)
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert "parkingposition" in side.seen, (
+            "a read after the enrich block was never reached"
+        )
+
+    def test_the_fallback_still_fires_when_the_list_merely_omits_the_vin(self) -> None:
+        """Counter-check: the guard must be about the WALL, not about the list
+        being short. A successful relations read that does not mention this VIN
+        is the case the fallback was written for."""
+        c = _conn(master_age_s=100.0)
+        c._get_json = AsyncMock(side_effect=_reads(
+            vwde_charging={"data": {"batteryStatus": {}}},
+        ))
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert c.get_relation_detail.await_count == 1
+
+    def test_a_non_auth_preflight_failure_still_uses_the_fallback(self) -> None:
+        """Regression on the #1659 fall-through: only the auth wall sets the
+        flag, so a shim-level failure keeps reaching the singular detail exactly
+        as it has since then."""
+        c = _conn(master_age_s=100.0)
+        c.get_relations = AsyncMock(side_effect=TypeError("shim signature"))
+        c._get_json = AsyncMock(side_effect=_reads(
+            vwde_charging={"data": {"batteryStatus": {}}},
+        ))
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert c.get_relation_detail.await_count == 1
+
+
+class TestTheOtherReadersStopReFiringTheWalledRead:
+    """``_ensure_backend`` is called by five readers and can only ask one thing.
+
+    Warning lights, parking position, battery health, range measurements and
+    the capabilities read all call it, and its single source for the platform is
+    ``get_relations`` (_website_authproxy.py:2011-2030). After a relations auth
+    wall each of those re-asked and had the 401 raised back into it, so one wall
+    cost reads sitting on realms that may well have answered. The marker is
+    keyed by VIN and cleared at the top of every poll, so it describes this poll
+    rather than latching.
+    """
+
+    def test_ensure_backend_does_not_re_ask_after_a_wall(self) -> None:
+        c = _conn()
+        c._relations_walled = {VIN}
+        asyncio.run(c._ensure_backend(VIN))
+        assert c.get_relations.await_count == 0
+
+    def test_ensure_backend_still_asks_without_the_marker(self) -> None:
+        """Counter-check on the guard: without it this test would pass for the
+        wrong reason, and the one above would prove nothing."""
+        c = _conn()
+        c._relations_walled = set()
+        asyncio.run(c._ensure_backend(VIN))
+        assert c.get_relations.await_count == 1
+
+    def test_a_cached_platform_still_short_circuits_first(self) -> None:
+        """Regression: the pre-existing early return must still win, including
+        the empty-string 'seen, no backend field' entry the parse writes."""
+        c = _conn()
+        c._vin_backend = {VIN: ""}
+        c._relations_walled = set()
+        asyncio.run(c._ensure_backend(VIN))
+        assert c.get_relations.await_count == 0
+
+    def test_one_wall_costs_exactly_one_relations_request_per_poll(self) -> None:
+        """The whole poll, with the two enrich readers left REAL rather than
+        mocked, because mocking them is what hid this in the first place."""
+        c = _conn(master_age_s=100.0)
+        del c.get_warning_lights
+        del c.get_last_lock_action
+        c.get_relations = AsyncMock(
+            side_effect=AuthenticationError("relations -> HTTP 401"),
+        )
+        side = _reads(vwde_charging={"data": {"batteryStatus": {}}})
+        c._get_json = AsyncMock(side_effect=side)
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert c.get_relations.await_count == 1, (
+            f"the walled read was fired {c.get_relations.await_count} times"
+        )
+
+    def test_the_marker_does_not_latch_across_polls(self) -> None:
+        """A sticky marker would keep suppressing the platform probe after the
+        session recovered, which would silently pin an MBB car to the wrong gdc
+        for as long as Home Assistant stayed up."""
+        c = _conn(master_age_s=100.0)
+        c.get_relations = AsyncMock(
+            side_effect=AuthenticationError("relations -> HTTP 401"),
+        )
+        c._get_json = AsyncMock(side_effect=_reads(
+            vwde_charging={"data": {"batteryStatus": {}}},
+        ))
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert VIN in c._relations_walled
+        # next poll, session recovered
+        c.get_relations = AsyncMock(return_value=MagicMock(vehicles=[]))
+        c._get_json = AsyncMock(side_effect=_reads(
+            vwde_charging={"data": {"batteryStatus": {}}},
+        ))
+        with patch(f"{MOD}.map_charging_to_vehicle_data", lambda _p, d: d):
+            asyncio.run(c.get_vehicle_data(VIN))
+        assert VIN not in c._relations_walled

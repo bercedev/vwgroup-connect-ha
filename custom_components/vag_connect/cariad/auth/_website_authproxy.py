@@ -2019,6 +2019,16 @@ class WebsiteAuthProxyConnector:
         """
         if vin in self._vin_backend:
             return
+        # #1827 — the relations read already walled for this VIN on this poll.
+        # ``get_relations`` is the only thing this method can ask, so re-asking
+        # buys a guaranteed second 401 and, worse, re-raises it into whichever
+        # read called us — which is how a single relations wall used to cost the
+        # warning-lights and lock-history reads too, each on a realm that may
+        # well have answered. Leave the WeConnect default in place, exactly as
+        # the non-auth branch below already does, and let the caller's own
+        # endpoint decide.
+        if vin in getattr(self, "_relations_walled", ()):
+            return
         try:
             await self.get_relations()
         except AuthenticationError:
@@ -2428,6 +2438,18 @@ class WebsiteAuthProxyConnector:
         # flight so the wall is attributable in the log + diagnostics.
         _core_exc: AuthenticationError | APIError | None = None
         _core_read = "relations"
+        # #1827 — set only by the relations AUTH wall below, never by the generic
+        # branch beside it, because the two need different treatment at the
+        # relation-detail fallback further down.
+        _rels_walled = False
+        # The same fact, reachable from ``_ensure_backend`` further down the call
+        # stack. Keyed by VIN rather than a bare flag because several cars share
+        # one connector, and cleared at the top of every poll so it describes
+        # THIS poll — a sticky marker would keep suppressing the platform probe
+        # long after the session recovered.
+        if not hasattr(self, "_relations_walled"):
+            self._relations_walled: set[str] = set()
+        self._relations_walled.discard(vin)
 
         # Resolve the car's platform (MBB/MEB) up front so the live-status reads
         # below pick the correct gdc, and reuse the parsed relations for the
@@ -2462,6 +2484,8 @@ class WebsiteAuthProxyConnector:
                 # since #1659 (see tests/test_1709_h2_response_signatures.py) —
                 # this widens that window to the auth case rather than opening it.
                 _core_exc = exc
+                _rels_walled = True
+                self._relations_walled.add(vin)
                 self.probe_outcomes["vwde_core_read:relations"] = (
                     _http_status_from_exc(exc)
                 )
@@ -2633,9 +2657,30 @@ class WebsiteAuthProxyConnector:
                     match = next(
                         (v for v in rels.vehicles if v.vin == vin), None
                     )
-                if match is None:
+                if match is None and not _rels_walled:
                     _core_read = "relations-detail"
                     match = await self.get_relation_detail(vin)
+                elif match is None:
+                    # #1827 — the singular fallback is the SAME endpoint family as
+                    # the list that just walled: ``v2/users/me/relations/{vin}``
+                    # against ``v2/users/me/relations``, same resource host
+                    # (_authproxy.py:513-527). An auth wall on the list is a wall
+                    # on that realm, so this would fire for a guaranteed second
+                    # 401 and then re-raise, unwinding past the cohort-gated
+                    # position / SoH / measurements probes — the very unwind the
+                    # softening exists to stop. Skipping it belongs to the fix.
+                    #
+                    # The nickname and plate stay unset, which is where they were
+                    # before the softening as well: the whole poll used to end at
+                    # the wall. Only the auth wall sets the flag, so a non-auth
+                    # preflight failure keeps using the fallback exactly as it has
+                    # since #1659 — that one leaves the session intact, so the
+                    # singular read can genuinely answer.
+                    _LOGGER.debug(
+                        "vw.de relation enrich skipped for %s: relations walled, "
+                        "the singular fallback reads the same endpoint",
+                        vin[-6:],
+                    )
                 if match is not None:
                     if match.nickname:
                         d.vehicle_nickname = match.nickname
