@@ -394,6 +394,19 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   - Existing entries keep their tokens.
 - **Diagnostics:** the add-on token, the agent token and the phone's host address are redacted.
 - **Screen dumps:** a dump that contains an XML DOCTYPE or ENTITY declaration is refused before it is parsed (gszigethy/vwgroup-connect-ha#57).
+- **The name you give your car in the brand's app no longer stands in for its model.**
+  For VW and Audi the integration read that name as the car's model whenever the app
+  had one, so your own wording appeared everywhere the model does: the device name, the
+  entity IDs derived from it, the model line in a diagnostics download, and the title of
+  the pre-filled report link the Vehicle Data Scout and the Error Reporter build for you.
+  A name you typed is not a model designation, so it now goes to the vehicle nickname
+  sensor, which is already redacted in a diagnostics download, and the model field takes
+  only the brand's own model fields. The same applied to the name the EU Data Act portal
+  returns for the car, by a second route that skipped the model guard entirely; both are
+  fixed. Nothing was ever posted anywhere by itself — the reporters only ever pre-fill a
+  link you choose to open — but the title read as though it were the model. The other
+  brand paths already kept the two values apart. On a new setup the device is named after
+  the model; entity IDs that already exist are not renamed.
 
 
 ## [4.13.0] - 2026-10-10 — Six reporters' diagnostic readings, and two accounts that read the same car
