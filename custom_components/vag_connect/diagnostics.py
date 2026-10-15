@@ -465,7 +465,11 @@ _RAW_REDACT_KEYS = frozenset({
     # neither set — our name masked, the wire's not, the same shape of mistake
     # as the nickname above. All three are scalar URL strings, so taking them by
     # key costs no payload shape; their container ``maps`` is deliberately NOT
-    # listed, so the block keeps its shape and only the two URLs go.
+    # listed, so the block keeps its own key and its other contents are judged
+    # on their own merits rather than vanishing with it. Not "only the two URLs
+    # go": this set is matched at every depth, so any listed sibling inside
+    # ``maps`` goes too — test_a_redacted_key_beside_the_url_is_still_redacted
+    # asserts exactly that for ``licencePlate`` and ``vin``, one screen below.
     "renderurl", "lightmapurl", "darkmapurl",
     # #1832 — and the two render CONTAINERS on the same recorded Skoda
     # ``vehicle-status`` channel, found by sweeping the expected-key table
@@ -480,10 +484,21 @@ _RAW_REDACT_KEYS = frozenset({
     # while masking our own name is the mistake this issue is about.
     # Both taken by the container key, like ``images``, because the per-layer
     # URLs sit under a bare ``url`` and this set deliberately does not carry
-    # that. Safe as keys: at all three places ``renders`` is read in the
-    # integration (cariad/api/seat_cupra.py:563, cariad/api/skoda.py:2501,
-    # coordinator.py:7103) the key names a render-image container, so neither
-    # entry can swallow an unrelated harmless one.
+    # that. At all three places this integration touches ``renders`` the key
+    # names a render-image container: read at cariad/api/seat_cupra.py:563 and
+    # coordinator.py:7103, and written at cariad/api/skoda.py:2501 — a write,
+    # not a read, which the earlier wording had it as.
+    #
+    # That is evidence about what the name means in the bodies we parse, and it
+    # is NOT a guarantee that nothing harmless is ever caught. This set matches
+    # case-insensitively at every depth of brand bodies we do not parse, so a
+    # key spelled ``renders`` somewhere we never look is masked too, and no
+    # enumeration of our own call sites could show otherwise. The cost of that
+    # is a container replaced by a note about its kind; the cost of leaving it
+    # open is an image URL in a file people attach to public issues. The trade
+    # is taken deliberately, not argued away. ``compositerenders`` is listed on
+    # the same reasoning and its own read site (coordinator.py:7105), which the
+    # earlier wording extended the ``renders`` evidence to without saying so.
     "renders", "compositerenders",
     "nickname", "firstname", "lastname", "givenname", "familyname", "fullname",
     "dateofbirth", "birthdate", "phone", "phonenumber", "mobile",
