@@ -1188,6 +1188,7 @@ class WebsiteAuthProxyConnector:
         fields, action = _login_fields(self._otp_html or "")
         code_clean = str(code).strip()
         matched = False
+        matched_keys: list[str] = []
         for key in list(fields):
             kl = key.lower()
             if kl in (
@@ -1196,12 +1197,42 @@ class WebsiteAuthProxyConnector:
             ):
                 fields[key] = code_clean
                 matched = True
+                matched_keys.append(key)
             elif "remember" in kl:
                 fields[key] = "true"
         if not matched:
             fields["code"] = code_clean
         if self._otp_state:
             fields.setdefault("state", self._otp_state)
+
+        # #1827 — this method had NO logging at all, while begin_login above has
+        # five lines. Two reporters hit the email-OTP step within the same hours
+        # and one attached a full debug log: it ends at "email-OTP challenge
+        # pending" and says nothing about the step that failed, so the log could
+        # not distinguish the two causes. That is the #1712 lesson repeating —
+        # the line that identifies the failure has to exist before the report.
+        #
+        # The FIELD NAMES are the load-bearing fact. The whole reason the
+        # matching loop above exists (v2.14.10, and its test
+        # tests/test_v21410_otp_field_name.py) is that the IDP's code input is
+        # not always called "code": when none of the recognised names is present
+        # the fallback writes "code", the IDP reads that as "no code entered",
+        # re-issues a FRESH challenge — a new email — and the flow bounces on
+        # the challenge page for ever. Both reporters describe exactly that
+        # shape. If the IDP has renamed the field again, this line says so in
+        # one glance instead of costing a round of "please enable debug first".
+        #
+        # Names only, never values: ``fields`` holds the code, the _csrf and the
+        # hmac. Iterating the dict yields keys, and the code is not logged
+        # anywhere here or below.
+        _LOGGER.debug(
+            "Website authproxy submit_otp: %s; form fields: %s",
+            f"code set on {', '.join(matched_keys)}" if matched
+            else "NO recognised code field in the form — fell back to 'code', "
+                 "which the IDP may read as no code entered",
+            ", ".join(sorted(fields)),
+        )
+
         post_url = _resolve_action(self._otp_url, action)
         async with self._session.post(
             post_url,
@@ -1213,9 +1244,34 @@ class WebsiteAuthProxyConnector:
             landed = str(resp.url)
             landed_html = await resp.text(errors="replace")
             landed_status = resp.status
+            landed_chain = self._redirect_hosts(
+                getattr(resp, "history", ()), landed,
+            )
+
+        # Same shape as the two begin_login lines, so a reporter's log reads as
+        # one flow. ``_redirect_hosts`` emits hostnames only — it drops paths and
+        # query strings on purpose, because the OAuth state and any tokens live
+        # in the query.
+        _LOGGER.debug(
+            "Website authproxy submit_otp POST → status %s, chain: %s",
+            landed_status, landed_chain,
+        )
 
         if landed_status >= 400 or "email-challenge" in landed:
             err = _login_error(landed_html)
+            # Which of the two conditions fired, and whether the page carried an
+            # error at all. The page's own text is NOT logged: it is the IDP's
+            # message, it can name the account, and it already travels to the
+            # user in the exception below — logging it here would add a second
+            # place for it to escape and no new information.
+            _LOGGER.debug(
+                "Website authproxy submit_otp rejected: %s at %s; "
+                "page error text: %s",
+                f"HTTP {landed_status}" if landed_status >= 400
+                else "landed back on the email-challenge page",
+                _safe_url(landed),
+                "present" if err else "none",
+            )
             raise AuthenticationError(
                 err or "Website authproxy: OTP rejected — check the code"
             )
