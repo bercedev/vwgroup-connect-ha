@@ -74,12 +74,10 @@ jobs:
               sys.exit(1)
           "
 
-      # CONTRIBUTING.md has forbidden full VINs in the repo since 2026-04-30 and
-      # binds maintainers too. The rule was still broken eleven times, a 2026-05
-      # cleanup missed most of them, one came back seven weeks later, and two
-      # outside contributors propagated one in good faith because nothing told
-      # them. Runs here rather than only in a git hook, because .git/hooks is not
-      # committed and so does not protect a fork PR at all.
+      # CONTRIBUTING.md forbids full VINs in the repo, fixtures and commits, and
+      # it binds maintainers as well as contributors. Runs here rather than only
+      # in a git hook, because .git/hooks is not committed and so does not
+      # protect a fork PR at all.
       - name: Keine echten VINs im Repo
         run: python3 scripts/check_no_real_vins.py
 

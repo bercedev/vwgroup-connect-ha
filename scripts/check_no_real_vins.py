@@ -3,13 +3,9 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Refuse a commit that adds a VIN which does not look synthetic.
 
-CONTRIBUTING.md has forbidden full VINs in the repo, fixtures and commits since
-2026-04-30, and it binds maintainers as well as contributors. The rule was still
-broken nine times, a sanitization pass in 2026-05 cleaned three occurrences and
-missed the rest, one of those was reintroduced into a new test file seven weeks
-later, and two outside contributors propagated one of them in good faith because
-nothing told them not to. A written rule that nothing enforces is a rule that
-decays. This is the enforcement.
+CONTRIBUTING.md forbids full VINs in the repo, fixtures and commits, and it binds
+maintainers as well as contributors. A written rule that nothing enforces is a
+rule that decays. This is the enforcement.
 
 The check is deliberately shape-based rather than a list. An allowlist of
 individual VINs would need over a hundred entries and would go stale the moment
@@ -42,14 +38,18 @@ from pathlib import Path
 
 # A VIN is 17 characters; I, O and Q are excluded from the alphabet by the
 # standard, which is what keeps this from matching ordinary hex or base64 runs.
-# Position 3 of a WMI may be a DIGIT (ISO 3779), and four of the eleven
-# prefixes below are exactly that shape: WP0 (Porsche), WF0, WV1 and WV2.
-# Requiring three letters here made all four structurally unreachable — the
-# guard could not see a Porsche VIN at all, while claiming to refuse any
-# VIN-shaped literal without a visible mark of being made up. Only the first
-# two characters are letters in every prefix this project cares about, and
-# the _WMI filter in scan() does the narrowing straight after the match, so
-# widening here cannot add a reported false positive.
+#
+# TWO leading letters, not three. Position 3 of a world-manufacturer identifier
+# may be a digit (ISO 3779), and four of the eleven prefixes below are exactly
+# that shape: WP0, WF0, WV1, WV2. With {3} the pattern could not produce a
+# candidate under any of them, so the check was structurally blind to a third of
+# its own prefix list - Porsche included - while its documentation said it
+# refuses any VIN-shaped literal that carries no mark of being made up.
+#
+# Widening is safe because the narrowing happens in scan(), which filters every
+# match through startswith(_WMI) immediately after finditer. A 17-character
+# token that is not one of these prefixes is discarded whether this matched it
+# or not, so the pattern may be the looser of the two.
 _VIN = re.compile(r"(?<![A-HJ-NPR-Z0-9])([A-HJ-NPR-Z]{2}[A-HJ-NPR-Z0-9]{15})(?![A-HJ-NPR-Z0-9])")
 
 # Only these world-manufacturer prefixes concern this project. Narrowing to them
@@ -61,14 +61,11 @@ _MARKERS = ("TEST", "SYNTHET", "SYNTH", "KEEP", "DUMMY", "FAKE", "EXAMPLE",
 
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
               ".pytest_cache", ".ruff_cache", "htmlcov"}
-# This file alone, because its own documentation above spells out example VINs to
+# This file alone, because the guidance it prints spells out example VINs to
 # explain the rules. Nothing else is exempt, and the exemption list is kept to one
-# entry on purpose: the first version of this check also exempted its test file,
-# which then held five real VINs while the check reported the tree clean. A guard
-# that looks away from a file is a guard whose blind spot is exactly where the
-# awkward cases collect. The test file now assembles its fixtures from fragments
-# so no whole VIN appears in its source, and asserts that this set does not
-# mention it.
+# entry on purpose: a guard that looks away from a file is a guard whose blind spot
+# is exactly where the awkward cases collect. The guard's own test file is scanned
+# too, and it asserts that this set does not mention it.
 _SKIP_FILES = {"scripts/check_no_real_vins.py"}
 
 

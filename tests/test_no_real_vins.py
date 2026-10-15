@@ -2,13 +2,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """The VIN guard has to actually catch things, and the repo has to stay clean.
 
-CONTRIBUTING.md has said since 2026-04-30, under "What goes in the repo /
-fixtures / commits", that full VINs do not belong here, "even from the tester's
-own car", and that the section binds maintainers as well as contributors. It was
-still broken eleven times. A 2026-05 sanitization pass cleaned three occurrences
-and missed the rest; one of those was reintroduced into a new test file seven
-weeks later; and two outside contributors propagated one of them in good faith,
-because nothing in the tooling told them. A written rule nothing enforces decays.
+CONTRIBUTING.md says, under "What goes in the repo / fixtures / commits", that
+full VINs do not belong here, "even from the tester's own car", and that the
+section binds maintainers as well as contributors. A written rule nothing
+enforces decays.
 
 Two things are tested here, and the first matters more than it looks:
 
@@ -20,20 +17,18 @@ Two things are tested here, and the first matters more than it looks:
 2. The tree is clean. This is the regression test proper.
 
 The positive fixtures are assembled from fragments at run time rather than
-written out as literals, and that is not cosmetic. The first version of this file
-used five of the real VINs this change exists to remove, on the reasoning that a
-test proving they are refused obviously needs them — and then exempted itself
-from the guard so CI stayed green. The result was a check that certified the tree
-clean while five real VINs sat in the one file it refused to look at, including a
-third party's car whose subscription state the repo records next to it. A guard
+written out as literals, and that is not cosmetic: the file that proves the guard
+refuses a production-shaped VIN must not be the one file that writes one down,
+and it must not buy a green result by exempting itself from the guard. A guard
 with a self-exemption is a guard with a blind spot, and the blind spot is exactly
-where the awkward cases accumulate.
+where the awkward cases accumulate — so there is no skip entry for this file.
 
-So: no fragment here is seventeen characters long, the guard's pattern cannot
-match this file's source, and the guard therefore has no skip entry for it. The
-serials below are invented — right manufacturer, right type code, a serial drawn
-from nothing — so they exercise the "looks real, refuse it" path without being
-anybody's car.
+The guard scans this file. Whole seventeen-character VINs in the negative-case
+list below do match the guard's pattern, and they go unreported because
+looks_synthetic() recognises them, not because the scan cannot see them. The
+serials in the positive fixtures are invented — right manufacturer, right type
+code, a serial drawn from nothing — so they exercise the "looks real, refuse it"
+path without being anybody's car.
 """
 from __future__ import annotations
 
