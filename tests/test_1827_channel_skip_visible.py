@@ -1,25 +1,38 @@
 # Copyright 2026 Prash Balan (@its-me-prash) — GNU AGPL v3.0-or-later
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""A supplementary channel that drops out leaves no trace in the diagnostics.
+"""A supplementary channel that drops out does not say WHY in the diagnostics.
 
 ``gather_and_merge`` reads the read-only channels concurrently and merges them
 onto the primary snapshot. A supplier that raises, or returns ``None``, is
 skipped — which is right, because a read-only fallback failing must never sink
-the whole poll. What is wrong is that the skip is invisible:
+the whole poll. What is wrong is that the REASON for the skip is invisible:
 
     _LOGGER.debug("supplementary channel %s failed, skipped: %s", ...)
 
-DEBUG only. Not in ``probe_outcomes`` (those are per-read, not per-channel), not
-in ``channel_status``, nowhere in the download. And the consequence is not merely
-a missing line: when every supplier is skipped, ``len(sources) == 1`` returns the
-primary verbatim, so the live-supersede rule — the thing that stops a stale batch
-value outranking a live reading — never runs at all.
+DEBUG only, and ``probe_outcomes`` held per-READ entries rather than per-channel
+ones, so the skip was not there either. The consequence is not merely a missing
+line: when every supplier is skipped, ``len(sources) == 1`` returns the primary
+verbatim, so the live-supersede rule — the thing that stops a stale batch value
+outranking a live reading — never runs at all.
 
-That is what made #1827 undecidable. The reporter shows a charge level of 19 owned
-by the batch channel while his own raw vw.de body carries 35, and from the
-download alone there is no way to tell whether the vw.de channel was skipped
-entirely or was present and simply had no charge level that poll. Both produce the
-same artefact. The one line that distinguishes them is a DEBUG log nobody has.
+What this docstring used to claim next, and what is NOT true: that the skip was
+"not in ``channel_status``, nowhere in the download". The diagnostics attached to
+#1827 contradicts that. The download does carry a per-channel block, and that block
+IS dated to the poll the file was taken on: ``_compute_channel_status``
+(coordinator.py:3525-3582) derives ``active`` / ``active_values`` / ``total_values``
+from ``field_sources``, which the merge rebuilds from scratch every time
+(``field_sources: dict[str, str] = {}``, _channel_merge.py:148). In that file the
+vw.de channel reads ``armed: true, active: true, active_values: 4``, it owns four
+named fields in ``field_sources``, and ``source_channel`` is
+``eu_data_act+website_authproxy``. So "was the vw.de channel skipped entirely" was
+in fact answerable from the download, and the answer there was no.
+
+What ``channel_status`` genuinely cannot do is say WHY a channel owns nothing.
+Three different events all render as ``active: false, active_values: 0``: the read
+raised, the read returned ``None``, and the read returned a snapshot that won no
+field because the primary already carried every one. Those have different causes
+and different fixes, and collapsing them is the part of #1827 that stayed
+undecidable — the one line that separated them was a DEBUG log nobody has.
 
 This is the same shape as #1712, where the line identifying a login page existed
 only at DEBUG and every report therefore cost a round of "please enable debug
@@ -39,8 +52,10 @@ carry a request URL, and on the authproxy path that URL has carried tokens.
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.vag_connect.cariad._channel_merge import gather_and_merge
+from custom_components.vag_connect.cariad.api.vw_eu import VWEUClient
 from custom_components.vag_connect.cariad.models import VehicleData
 
 _VIN = "WVWZZZAUZFW000000"
@@ -235,14 +250,134 @@ class TestTheLabelSetDescribesThisPollOnly:
         assert sink["channel:website_authproxy"] == "no_data"
 
 
+def _coord_stub(client):
+    """The attributes ``_merge_supplementary`` actually reaches for."""
+    from custom_components.vag_connect.coordinator import VagConnectCoordinator
+    stub = type("S", (), {})()
+    stub._cariad_client = client
+    stub.entry = MagicMock()
+    stub.entry.data = {}
+    stub.entry.options = {}
+    stub._primary_channel_name = (
+        VagConnectCoordinator._primary_channel_name.__get__(stub)
+    )
+    stub._read_priority_channel = (
+        VagConnectCoordinator._read_priority_channel.__get__(stub)
+    )
+    return stub
+
+
 class TestTheCallerWiresItUp:
     """#584's lesson: a sink that nothing writes to passes its own test forever.
-    The coordinator has to actually pass the client's probe_outcomes."""
 
-    def test_the_coordinator_passes_an_outcomes_sink(self):
-        import inspect
+    This used to be a grep of ``inspect.getsource(VagConnectCoordinator)`` for the
+    string ``"outcomes="``, which does not test the wiring at all: it passes just as
+    happily on ``outcomes=None`` as on the real sink, so the one failure mode it was
+    written to catch is the one it cannot see. It now drives
+    ``_merge_supplementary`` and reads the label off the CLIENT's own dict, which is
+    what diagnostics exports.
+    """
 
+    def test_the_merge_writes_the_label_into_the_clients_own_sink(self):
         from custom_components.vag_connect.coordinator import VagConnectCoordinator
-        src = inspect.getsource(VagConnectCoordinator)
-        call = src[src.index("gather_and_merge("):]
-        assert "outcomes=" in call[:600]
+        client = MagicMock()
+        client.probe_outcomes = {}
+        client.supplementary_readers = MagicMock(
+            return_value=[("website_authproxy", _raises(TimeoutError("x")))]
+        )
+        out = asyncio.run(VagConnectCoordinator._merge_supplementary(
+            _coord_stub(client), _VIN, _vd(battery_soc=19),
+        ))
+        # observation only — the primary still comes back untouched
+        assert out.battery_soc == 19
+        assert client.probe_outcomes["channel:website_authproxy"] == (
+            "failed:TimeoutError"
+        ), (
+            "the coordinator must hand gather_and_merge the client's real sink; "
+            "passing None, or a throwaway dict, loses the label before export"
+        )
+
+
+class TestTheSinkSurvivesTheVwdeSoleModePath:
+    """The labels and the sink they live in must have ONE lifetime.
+
+    ``get_status`` on the volkswagen.de sole-mode path used to REBIND the client's
+    sink to a fresh copy of the proxy's (``self.probe_outcomes = dict(getattr(web,
+    "probe_outcomes", {}))``). The proxy's own dict never holds a ``channel:`` key —
+    only ``_record`` writes those — so every label the previous poll's merge had
+    written was dropped at the start of the next poll, and anything else the CLIENT
+    had accumulated went with it. That rebind was the only unconditional one in the
+    tree: every other path creates the sink once (api/base.py:287) and mutates it in
+    place, and the two other ``= {}`` sites are guarded lazy-inits for
+    ``__new__``-built doubles followed by ``.update()`` (api/base.py:620-624,
+    api/porsche.py:486-487) — not resets.
+    """
+
+    @staticmethod
+    def _sole_mode_client(proxy_outcomes=None):
+        client = VWEUClient(MagicMock(), "u@t.de", "pw")
+        proxy = MagicMock()
+        proxy.maybe_roll = AsyncMock()
+        proxy.get_vehicle_data = AsyncMock(return_value=_vd(battery_soc=35))
+        proxy.last_raw_responses = {}
+        proxy.probe_outcomes = dict(proxy_outcomes or {})
+        client._website_proxy = proxy
+        return client
+
+    def test_get_status_merges_proxy_outcomes_rather_than_replacing_the_sink(self):
+        client = self._sole_mode_client({"vwde_charging": "200"})
+        sink = client.probe_outcomes
+        sink["channel:website_authproxy"] = "ok"
+        sink["channel:mbb"] = "no_data"
+        asyncio.run(client.get_status(_VIN))
+        assert client.probe_outcomes is sink, (
+            "the sink must be mutated in place, not rebound — base.py:624 is the "
+            "contract every other path already keeps"
+        )
+        assert sink["channel:website_authproxy"] == "ok"
+        assert sink["channel:mbb"] == "no_data"
+        assert sink["vwde_charging"] == "200", (
+            "the proxy's per-read entries still have to be surfaced — that is what "
+            "the rebind was there for (#923/#1157)"
+        )
+
+    def test_a_label_written_by_the_merge_outlives_the_next_get_status(self):
+        """The real sequence, and the window that made this matter: the poll loop
+        runs every ``get_status`` first and only then merges per VIN
+        (coordinator.py:4620 before :4777; :4436 before :4465 at setup). So between
+        the rebind and the merge that refills the sink lie the supplementary
+        channels' network reads for every car — and a diagnostics download taken in
+        that window carried no channel lines at all, which under this scheme reads
+        as "not attempted" for channels that were being attempted right then."""
+        client = self._sole_mode_client({"vwde_charging": "200"})
+        # poll 1 — get_status, then the merge writes this poll's labels
+        asyncio.run(client.get_status(_VIN))
+        asyncio.run(gather_and_merge(
+            "website_authproxy", _vd(battery_soc=35),
+            [("mbb", _returns(None))],
+            outcomes=client.probe_outcomes,
+        ))
+        assert client.probe_outcomes["channel:mbb"] == "no_data"
+        # poll 2 — get_status has run, the merge has not yet
+        asyncio.run(client.get_status(_VIN))
+        assert client.probe_outcomes.get("channel:mbb") == "no_data", (
+            "get_status must not be able to drop a label the merge wrote"
+        )
+
+    def test_a_new_built_client_without_init_still_works(self):
+        """``.update()`` needs the attribute to exist, and this client is built
+        via ``__new__`` without ``__init__`` all over this suite (vw_eu.py:430
+        documents the pattern). The old rebind created the attribute on the way
+        past; the in-place version needs base.py:622's guard to do the same, or
+        the fix would trade a lost label for an AttributeError."""
+        client = VWEUClient.__new__(VWEUClient)
+        proxy = MagicMock()
+        proxy.maybe_roll = AsyncMock()
+        proxy.get_vehicle_data = AsyncMock(return_value=_vd(battery_soc=35))
+        proxy.last_raw_responses = {}
+        proxy.probe_outcomes = {"vwde_charging": "200"}
+        client._website_proxy = proxy
+        assert not hasattr(client, "probe_outcomes")
+        out = asyncio.run(client.get_status(_VIN))
+        assert out.battery_soc == 35
+        assert client.probe_outcomes == {"vwde_charging": "200"}

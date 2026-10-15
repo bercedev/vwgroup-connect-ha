@@ -210,9 +210,11 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   round of "please switch on debug logging first".
 
   The per-channel lines describe the poll the file was taken on and nothing earlier: a channel you
-  switch off stops claiming an outcome instead of leaving its last one behind. Worth saying because
-  the entries alongside them do not work that way — those are written when a read is attempted and
-  stay put when it is not, so a reading there cannot be dated from the file.
+  switch off stops claiming an outcome instead of leaving its last one behind, on every kind of
+  entry. Worth saying because the entries alongside them do not work that way — those are written
+  when a read is attempted and stay put when it is not, so a reading there cannot be dated from the
+  file. One exception, so you are not misled by it: if you switch off the *last* of your extra read
+  channels, that final set of per-channel lines stays in the file until the integration restarts.
 
 - **A car whose service list comes from the read-only host keeps its remote commands blocked
   even right after a restart.** That block was already there and already correct, but it was
