@@ -28,7 +28,7 @@ from custom_components.vag_connect.companion.presets import (
 )
 from custom_components.vag_connect.companion.transport import CompanionTransportError
 
-VIN = "WVWZZZAUZFW805377"
+VIN = "WVWZZZAUZFW000000"
 
 
 class _Phone:

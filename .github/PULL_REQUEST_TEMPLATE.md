@@ -29,7 +29,8 @@ Closes #
 
 These run in CI on every PR to `main` — running them locally first keeps the round-trip short (see CONTRIBUTING.md → *Pull requests*):
 
-- [ ] `python -m pytest tests/` passes (CI also enforces coverage ≥ 65%)
+- [ ] `python -m pytest tests/` passes (CI also enforces a coverage floor —
+      the gate is `--cov-fail-under` in `.github/workflows/ci.yml`)
 - [ ] `python -m ruff check custom_components/` is clean
 - [ ] `mypy` strict is clean on `custom_components/vag_connect/` (full flags in CONTRIBUTING.md; CI runs the same checks)
 - [ ] Added a `## [Unreleased]` entry in `CHANGELOG.md` — CI rejects a code change without one — and credited the work (yourself, plus the reporter if this fixes their issue)

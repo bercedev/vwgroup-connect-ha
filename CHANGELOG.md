@@ -9,9 +9,14 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 > 📖 **Bi-lingual convention (v1.12.3 → v2.4.0 — DE-primary)**: section-titles were **DE / EN** joined by ` / ` and body content was German-only. Past entries are preserved as-is for historical accuracy.
 >
-> 📖 **Bi-lingual convention (v2.4.1+ — EN-primary, switched 2026-05-23)**: section-titles are now **EN / DE** joined by ` / `, body content is **English-primary** with German callouts where the original context was DACH-specific (Facebook-group threads, German tester names, brand-specific German terminology). The project's GitHub audience + the new "VW Group Connect" branding both lean international — English-primary makes the changelog readable for non-DACH users while keeping the DACH community's voice visible. Translations of individual body texts are available on request via [`docs/CHANGELOG_TECHNICAL.md`](docs/CHANGELOG_TECHNICAL.md) — same pattern.
+> 📖 **Bi-lingual convention (v2.4.1+ — EN-primary, switched 2026-05-23)**: section-titles are now **EN / DE** joined by ` / `, body content is **English-primary** with German callouts where the original context was DACH-specific (Facebook-group threads, German tester names, brand-specific German terminology). The project's GitHub audience + the new "VW Group Connect" branding both lean international — English-primary makes the changelog readable for non-DACH users while keeping the DACH community's voice visible. Ask in an issue if you need a particular entry translated.
 
 ## Semver-Regeln für dieses Projekt (pre-1.0.0)
+
+> **Historisch — nicht für neue Releases.** Das Projekt ist seit v1.0.0 auf
+> strikter Semver; maßgeblich ist die Tabelle in `RELEASE_PROCESS.md`, wo ein
+> Breaking Change MAJOR ist und nicht MINOR. Die Tabelle hier beschreibt nur,
+> wie die Versionen vor v1.0.0 vergeben wurden.
 
 | Was | Version | Beispiel |
 |---|---|---|
@@ -35,12 +40,14 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ---
 
-> 💡 **Für Entwickler / Contributors:** Vollständige technische Detail-Notes
-> für v1.8.6+ findest du in [`docs/CHANGELOG_TECHNICAL.md`](docs/CHANGELOG_TECHNICAL.md)
-> — mit jeder geänderten Datei, jeder Zeile, jeder Issue-Referenz und der
-> Methodik dahinter.
+> 💡 **Für Entwickler / Contributors:** Die technischen Detail-Notes stehen
+> in den Commit-Messages und Pull-Request-Bodies des jeweiligen Release — mit
+> jeder geänderten Datei, jeder Issue-Referenz und der Methodik dahinter.
 
 ## [Unreleased]
+
+
+## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
 
 - **Volkswagen Companion (ADB): VW app 4.6.4 mapping, controls, more reads and safety gates.** Developed against a Tiguan eHybrid (reads verified on the car) in [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha) (fork releases 4.11.0-1 to 4.13.0-4, plus the fixes from this PR's review; PR numbers below refer to that repository). Thanks @gszigethy; app captures from @plainmad (Mk8 Golf GTE), @kgroshert (ID.4, e-up!) and @WEZANGO (CUPRA Born) ([#968](https://github.com/its-me-prash/vwgroup-connect-ha/issues/968)). Functional and technical design: [docs/COMPANION.md](docs/COMPANION.md).
 
@@ -155,6 +162,7 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Geändert / Changed
 
+- **The "volkswagen.de read channel needs re-login" notice now says which car it means.** If you run more than one vehicle, two accounts produced two identical notices and nothing distinguished them, so you could not tell which password belonged to which. The notice carries the last six characters of the car's VIN now — the same short form the logs and the diagnostics download already use, never the full identifier. Thanks @kalwados (#1843).
 - **Some cars that the legacy MBB host turns away now get their service list from the EU-DP
   host.** When the legacy host answers `401 gw.error.authentication`, the operationList is now
   requested once from the EU-DP host before the car is marked "no legacy". That list is used
@@ -184,17 +192,72 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **Reloads:** a reload waits for a running walk to finish (gszigethy/vwgroup-connect-ha#60). Wake/sleep and close-app options apply without a reload (gszigethy/vwgroup-connect-ha#59).
 - **App prompts:** the Google Maps consent is accepted only during the parking read (gszigethy/vwgroup-connect-ha#56). The app's rating prompt is closed with BACK, never answered (gszigethy/vwgroup-connect-ha#29).
 - **App string table:** fetched only when the app version changes. Without it, commands and sync are refused unless the UI language can be confirmed (gszigethy/vwgroup-connect-ha#58).
-- **One entity per value (breaking for automations that use the removed sensors):**
+- **One entity per value (breaking only on a Volkswagen Companion entry with Read-only Mode off, the one place these removals happen):**
   - The read-only sensor and binary sensor that repeated a control's value are removed. This covers climate at unlock, window heating, the zones, climatisation, charging, charge target and the departure timers.
   - The app's own target temperature and start mode readings are shown by the climate entity (gszigethy/vwgroup-connect-ha#65, gszigethy/vwgroup-connect-ha#103).
-  - Climate runs from the climate entity alone. The climate switch is no longer created on companion entries; use the climate entity's on/off. Its registry entry is removed at setup (gszigethy/vwgroup-connect-ha#103).
+  - Climate runs from the climate entity alone: use its on/off instead of a climate switch. No 4.x release created that switch on a Companion entry, so no 4.x upgrade loses one — setup only clears a leftover registry entry from the single much older release that did (gszigethy/vwgroup-connect-ha#103). Entities ARE removed by this group; the bullets above say which.
 - **Cloud-only diagnostics removed from companion entries:** push event, API observer findings and wake count today (gszigethy/vwgroup-connect-ha#66).
 - **Data source label:** shows the companion transport (`companion_adb`) instead of "Volkswagen EU (WeConnect ID)" (gszigethy/vwgroup-connect-ha#67).
 - **Companion entity ids carry "adb"** (for example `sensor.tiguan_adb_battery_level`, named "Tiguan Battery Level"), so companion and EU Data Act entities can be told apart. Existing entity ids are unchanged (gszigethy/vwgroup-connect-ha#68, gszigethy/vwgroup-connect-ha#81).
 - **The vehicle sync warning is translated.** The note that each sync wakes the car appears in every supported language.
 - **Relay errors are reported only as fixed codes**, never as free text from the phone.
+- **Release documentation corrected** (`RELEASE_PROCESS.md` and the CI prose):
+  the prescribed changelog heading format was one no parser accepts, the
+  coverage gate was quoted with stale values in three places, and eight links
+  pointed at a file that no longer exists.
 
 ### Behoben / Fixed
+
+- **The diagnostics now say when one of the extra read channels dropped out.** If the
+  `volkswagen.de` channel or the EU Data Act portal fails during a poll, the integration keeps
+  going on the others, which is right. Until now it kept going silently: the skip was written
+  only to a debug log, so a downloaded diagnostics file could not tell you whether a channel had
+  fallen over or had simply found nothing that round. Those two look identical from the outside
+  and have different causes, and the download now distinguishes them per channel.
+
+  This matters beyond tidiness. When every extra channel drops out, the rule that stops an older
+  batch reading from outranking a live one has nothing to compare and does not run — so a value
+  can look stale for a reason that was, until now, invisible in the file. If you report an
+  unexpected reading, the answer should be in the diagnostics you attach rather than cost you a
+  round of "please switch on debug logging first".
+
+  The per-channel lines describe the poll the file was taken on and nothing earlier: a channel you
+  switch off stops claiming an outcome instead of leaving its last one behind, on every kind of
+  entry. Worth saying because the entries alongside them do not work that way — those are written
+  when a read is attempted and stay put when it is not, so a reading there cannot be dated from the
+  file. One exception, so you are not misled by it: if you switch off the *last* of your extra read
+  channels, that final set of per-channel lines stays in the file until the integration restarts.
+- **The "sign in again" notice no longer sends an Audi owner to a door the manufacturer
+  locked.** When a passwordless entry's session expires, the notice told everyone to choose
+  Reauthenticate and scan the sign-in code again. For Audi that cannot work: Volkswagen
+  switched off the app sign-in that brand used, so the code sign-in refuses to start and the
+  reauth lands on a banner saying so. @ratclma reported hitting exactly that, after following
+  this advice from us, which is how it was found.
+
+  The sign-in prompt now reads the brand and the kind of sign-in the entry actually stored.
+  Where the code sign-in still works it hands off to it as before. Where the manufacturer
+  retired it, the prompt asks for your email address and password instead, and attaches them to
+  the existing entry, so its history, its settings, its entity names and any extra channels you
+  had set up all survive. The email field is deliberately left empty: these entries store an
+  internal account identifier rather than an address, and a pre-filled box would invite you to
+  type only a password, which is the one thing that cannot work.
+
+  This is fixed in the sign-in prompt rather than in the repair notice on purpose. Home
+  Assistant opens that prompt by itself whenever the session has expired, so a notice pointing
+  elsewhere would have left the dead end reachable without you clicking anything.
+
+  The first round of this stopped the integration guessing on its own. Such an entry no
+  longer attempts, unprompted and in the background, the email-and-password sign-in it has
+  no stored password for — which had been putting the
+  account's internal identifier in the email field once an hour for seven hours, and
+  reporting the refusal as a portal action the car in question could not even use. It now
+  says the session expired and gives up after two failed rounds instead of retrying hourly,
+  the same rule Porsche entries have had since 4.7.8.
+
+  Two further defects in the same notice went with it: its title said "VW Group" instead of
+  naming the brand, and although it told you to go and do something, it offered no Repair button
+  at all. Both notices have one now
+  ([#1813](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1813)).
 
 - **A car whose service list comes from the read-only host keeps its remote commands blocked
   even right after a restart.** That block was already there and already correct, but it was
@@ -220,20 +283,6 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
   measuring its tyres at all. That is the moment the reading matters most, and it now reads as
   the measurement it is. Thanks @Kolbi, who quoted the raw value straight from the portal
   response (#1819).
-- **An entry you set up by scanning the sign-in code now asks you to scan it again, instead of
-  guessing at a password it never had.** A UK Audi Q4 e-tron was set up that way in July and ran
-  for 87 days. Then its session stopped renewing, and the integration spent the next seven hours
-  doing the wrong thing once an hour: it fell back to signing in with an email and a password,
-  and because that kind of entry stores no password, it put the account's internal id into the
-  email field. The identity service answered that this is not an email, which the integration
-  read as "the EU Data Act portal needs a one-time action" and said so, to an owner in the UK
-  whose car cannot use that portal at all. Meanwhile nothing offered him the one thing that
-  would have fixed it, so the entities stayed unavailable and the log filled up.
-  Such an entry now stops before sending anything, says that the sign-in session expired, and
-  gets the Reauthenticate button, which has routed these entries to the sign-in code since
-  v2.x. The retry also stops after two failed rounds rather than continuing hourly, which is
-  the same rule Porsche entries have had since 4.7.8. Thanks @ratclma, whose report named the
-  cause and the fix (#1813).
 - **Your car is no longer told it is a model it isn't.** An Audi e-tron 55 from 2019 was
   informed by the integration that it is "an MEB / ID-family car (ID.3/4/5/7, Enyaq, Born,
   Q4)". It is not one, and its owner said so. The notice was built from the backend's
@@ -375,6 +424,24 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 - **An interrupted walk** discards any setting it left unsaved instead of sending it with the next command (gszigethy/vwgroup-connect-ha#53).
 - **Departure timers** that were not read show unknown, not off (gszigethy/vwgroup-connect-ha#10).
 - **Vehicle Settings** is read even when the charge target is already known (gszigethy/vwgroup-connect-ha#9).
+- **A stale battery level on a car whose volkswagen.de channel was plainly being read.**
+  The poll opens with a relations lookup that resolves which platform the car is on, and a
+  refusal there used to abandon the rest of the poll — so the charging read never ran, the
+  volkswagen.de snapshot carried no battery level at all, and the merge kept the only value it
+  had: the portal feed's last capture, days old next to a channel that looked live. Nothing in
+  the merge was wrong. The refusal is now recorded and the remaining reads still run, exactly
+  as a refusal on one read already stopped costing the others. On a car that is not MEB the
+  platform stays unresolved after such a refusal and those reads are expected to come back
+  empty, which the diagnostics name. Thanks @Fishermanjb (#1827).
+- **A session that had really expired stopped being noticed.** At the end of the same poll the
+  integration decides whether a refused read means "this one car is walled" or "the session is
+  dead", and it decided by asking whether a model name or colour had been filled in. Those are
+  kept for a day once read, so from the first successful poll onward the answer was always yes:
+  the "session is dead" branch could not be reached again for as long as Home Assistant stayed
+  running, and reconnecting was left to the ten-minute background refresh on its own. The
+  question is now whether a read actually reached Volkswagen during that poll. The model,
+  colour and renders do not flicker as a result — they are held a layer further up, which is
+  what that was always for. Found while looking into #1827.
 
 #### Fixes in shared code (all channels)
 
@@ -388,12 +455,25 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Sicherheit / Security
 
+- **Diagnostics redaction hardening.** The diagnostics download masks more of what it carries
+  before you attach it to an issue, in both the per-vehicle and the raw-payload section.
+  Nothing about the integration's behaviour changes and no sensor is affected. Two of the
+  newly masked entries are containers rather than single values, so a raw capture now shows a
+  note about their kind in place of their inner shape — worth knowing if you use that section
+  to help map a new field. Thanks @Fishermanjb, whose report of a neighbouring problem is what
+  led here.
 - **Tokens:**
   - New ADB Bridge add-on setups require a token.
   - The relay token form suggests a random token, and a custom token needs at least 32 characters with enough variety.
   - Existing entries keep their tokens.
 - **Diagnostics:** the add-on token, the agent token and the phone's host address are redacted.
 - **Screen dumps:** a dump that contains an XML DOCTYPE or ENTITY declaration is refused before it is parsed (gszigethy/vwgroup-connect-ha#57).
+- **Vehicle identification numbers:** CI refuses a VIN-shaped literal in the repository that carries no visible mark of being made up.
+- **For VW and Audi, the name you give your car in the brand's app is kept out of the model field.** It is shown as the vehicle nickname instead, which a diagnostics download redacts. The Škoda official-API channel still puts that name in the model field; that is a separate change, because the same field carries the real model for every owner who never renamed their car. Entity IDs that already exist are not renamed. On a NEW setup the device is named after the model — and where the brand's garage entry carries only your name and no model, the device falls back to the brand plus the last six characters of the VIN, so a new entry can read "Volkswagen 1234AB" where it would previously have read your own wording.
+- **Vehicle Data Scout:** the masking that prepares a sample value for a public
+  issue now covers another of the encodings the portal uses, so an encoded field
+  is replaced by a note about its kind and size rather than shortened. Reported
+  as a new field by @autosklo (#1830); nothing was exposed in that report.
 
 
 ## [4.13.0] - 2026-10-10 — Six reporters' diagnostic readings, and two accounts that read the same car

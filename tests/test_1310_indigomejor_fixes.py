@@ -167,21 +167,34 @@ def test_skoda_empty_detailed_statistics_leaves_last_trip_none() -> None:
     assert d.lifetime_distance_km is None
 
 
-def test_diagnostics_scrub_masks_vin_inside_render_url() -> None:
-    # #1310 — render_url embeds the full VIN in the blob filename; the string-value
-    # scrub masked only email + GPS, so the VIN leaked. It's masked now.
+def test_diagnostics_scrub_masks_vin_inside_a_url_under_an_unlisted_key() -> None:
+    # #1310 — a render URL embeds the full VIN in the blob filename; the
+    # string-value scrub masked only email + GPS, so the VIN leaked. The string
+    # branch masks it now, and leaves the rest of the string alone.
+    #
+    # #1832 moved this off ``render_url``. That key is in _REDACT_KEYS now, so
+    # the key match wins before the string branch is reached — asserting #1310's
+    # guarantee there would have stayed green while measuring nothing. The
+    # guarantee itself is unchanged and still worth pinning, so it is measured
+    # here under a key neither set lists, which is where the string branch is
+    # genuinely the thing doing the work. The key-level behaviour that replaced
+    # it is asserted in tests/test_1832_render_url_spellings.py.
+    #
+    # The VIN is visibly invented (zeroed serial) and still 17 characters, which
+    # is all the masking assertion needs.
     import json
 
     from custom_components.vag_connect.diagnostics import _scrub
     out = _scrub({
-        "render_url": (
+        "some_unlisted_key": (
             "https://x.blob.core.windows.net/widget-renders/"
-            "TMBJK0NX4MY109119.png?etag=0x8DEEC19E6798565"
+            "TMBJK0NX4MY000000.png?etag=0x8DEEC19E6798565"
         ),
-        "composite_render_urls": {"side": "https://x/WAUZZZ8T99A012765.png"},
     }, gps_round=False)
     blob = json.dumps(out)
-    assert "TMBJK0NX4MY109119" not in blob      # full VIN gone
-    assert "WAUZZZ8T99A012765" not in blob       # composite VIN gone too
-    assert "109119" in blob                      # masked tail survives
+    assert "TMBJK0NX4MY000000" not in blob      # full VIN gone
+    # The masked tail survives. Asserted as the whole mask rather than the bare
+    # six characters: the placeholder VIN ends in a zero run, so a bare-digits
+    # check would also pass against text that never went through the masker.
+    assert "***000000" in blob
     assert "0x8DEEC19E6798565" in blob           # etag hash untouched

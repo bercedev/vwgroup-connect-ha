@@ -185,7 +185,7 @@ Examples in [`docs/lovelace-example.yaml`](lovelace-example.yaml).
 VW Group Connect entity-IDs follow the pattern:
 
 ```
-<platform>.<vehicle_nickname_or_vin>_<field>
+<platform>.<vehicle_model_or_vin>_<field>
 ```
 
 Examples (for a vehicle named "Q4 e-tron"):
@@ -204,7 +204,7 @@ lock.q4_e_tron_central_locking
 **Quickest way to discover them:**
 
 1. *Developer Tools → States* (left sidebar bottom)
-2. Filter: `vag_connect` (or your nickname / VIN-last-6)
+2. Filter: `vag_connect` (or your model name / VIN-last-6)
 3. Copy the `entity_id` column
 
 ---

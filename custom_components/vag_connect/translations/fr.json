@@ -53,6 +53,7 @@
         "title": "Reconnexion — {brand}",
         "description": "La session pour **{username}** a expiré.\n\nVeuillez saisir à nouveau votre mot de passe.",
         "data": {
+          "username": "Adresse e-mail",
           "password": "Mot de passe",
           "spin": "S-PIN"
         }
@@ -2558,7 +2559,7 @@
       "description": "Votre compte Volkswagen s'est connecté et votre garage a été lu, mais les demandes de données par véhicule (état, recharge, climatisation) sont refusées avec une erreur HTTP 403 Forbidden, et la réponse porte un marqueur d'**attestation de l'appareil**.\n\nIl s'agit d'un **verrouillage côté serveur par VW**, pas d'un problème d'abonnement ni de quelque chose qu'une reconnexion peut résoudre — renouveler Car-Net n'aidera donc pas. VW exige désormais un jeton d'attestation de l'appareil signé par Google (Firebase App Check / Play Integrity) que l'application officielle génère à partir d'une build durcie, ce qu'un client open source ne peut pas reproduire.\n\nL'intégration continue d'afficher les dernières données mises en cache. Cet avertissement disparaît tout seul si VW rouvre le plan de données."
     },
     "supplementary_reauth": {
-      "title": "Le canal de lecture Volkswagen.de doit être reconnecté",
+      "title": "Le canal de lecture Volkswagen.de doit être reconnecté — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -2638,6 +2639,10 @@
     "device_login_expired": {
       "title": "Reconnectez-vous pour rétablir {brand}",
       "description": "The sign-in session for this entry has expired and could not be renewed on its own.\n\nThis entry was set up by scanning the sign-in code, so there are no stored credentials to retry with and nothing to correct. Choose **Reauthenticate** on the integration and scan the code again; the vehicle data returns as soon as the new session is in.\n\nUntil then the entities stay unavailable. This is not a wrong-password problem and it is nothing you did wrong."
+    },
+    "device_login_grant_retired": {
+      "title": "Restaurer {brand} avec e-mail et mot de passe",
+      "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
     }
   },
   "services": {

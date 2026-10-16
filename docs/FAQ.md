@@ -1,7 +1,7 @@
 # Frequently Asked Questions / Häufig gestellte Fragen
 
 > Audience: end-users + first-time installers. Maintainer-facing
-> notes are in `docs/CHANGELOG_TECHNICAL.md` and `docs/ROADMAP.md`.
+> notes are in `docs/ROADMAP.md`.
 
 ## 🔋 What actually wakes the car?
 
@@ -431,7 +431,7 @@ being redesigned): [`docs/dashboards.md`](dashboards.md).
 ## 📚 Where to find more details
 
 - **Dashboard troubleshooting + Lovelace cards:** `docs/dashboards.md`
-- **Per-brand technical detail:** `docs/CHANGELOG_TECHNICAL.md`
+- **Per-release detail, brand by brand:** `CHANGELOG.md`
 - **Future roadmap + planned releases:** `docs/ROADMAP.md`
 - **Pre-implementation research:** `docs/research/`
 - **Brand Captains community:** `BRAND_CAPTAINS.md`

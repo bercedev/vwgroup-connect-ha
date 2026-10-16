@@ -8,7 +8,7 @@ send to the car, how it is built, and where it is known to be weak.
 
 | | |
 |---|---|
-| **Applies to** | the first release after 4.13.0 |
+| **Applies to** | 5.0.0 |
 | **Baseline app** | VW app **4.6.4** (`com.volkswagen.weconnect`); 4.3.2 is still read-compatible |
 | **Status** | experimental, opt-in; Volkswagen only is verified |
 | **Credit** | The channel, its transport, selectors and navigation are Prash Balan's ([@its-me-prash](https://github.com/its-me-prash)). The VW app 4.6.4 mapping, the controls, the extra reads and the safety gates described here were developed in [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha). App captures came from @plainmad (Mk8 Golf GTE), @kgroshert (ID.4, e-up!), @WEZANGO (CUPRA Born) and @gszigethy (Tiguan eHybrid), and the prior art of @ckomma. |

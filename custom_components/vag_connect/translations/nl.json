@@ -53,6 +53,7 @@
         "title": "Opnieuw inloggen — {brand}",
         "description": "De sessie voor **{username}** is verlopen.\n\nVoer uw wachtwoord opnieuw in.",
         "data": {
+          "username": "E-mailadres",
           "password": "Wachtwoord",
           "spin": "S-PIN"
         }
@@ -2558,7 +2559,7 @@
       "description": "Je Volkswagen-account is ingelogd en je garage is gelezen, maar de gegevensverzoeken per voertuig (status, laden, klimaat) worden geweigerd met HTTP 403 Forbidden, en het antwoord bevat een **apparaatattestatie**-markering.\n\nDit is een **serverzijdige vergrendeling door VW**, geen abonnementsprobleem en niets wat opnieuw inloggen kan oplossen — Car-Net verlengen helpt dus niet. VW vereist nu een door Google ondertekend apparaatattestatie-token (Firebase App Check / Play Integrity) dat de officiële app vanuit een geharde build aanmaakt en dat een opensource-client niet kan nabootsen.\n\nDe integratie blijft de laatst opgeslagen gegevens tonen. Deze waarschuwing verdwijnt vanzelf als VW het gegevensvlak weer openstelt."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-leeskanaal vereist opnieuw inloggen",
+      "title": "Volkswagen.de-leeskanaal vereist opnieuw inloggen — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -2638,6 +2639,10 @@
     "device_login_expired": {
       "title": "Meld je opnieuw aan om {brand} te herstellen",
       "description": "The sign-in session for this entry has expired and could not be renewed on its own.\n\nThis entry was set up by scanning the sign-in code, so there are no stored credentials to retry with and nothing to correct. Choose **Reauthenticate** on the integration and scan the code again; the vehicle data returns as soon as the new session is in.\n\nUntil then the entities stay unavailable. This is not a wrong-password problem and it is nothing you did wrong."
+    },
+    "device_login_grant_retired": {
+      "title": "{brand} herstellen met e-mailadres en wachtwoord",
+      "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
     }
   },
   "services": {

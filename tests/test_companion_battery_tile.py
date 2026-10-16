@@ -404,7 +404,7 @@ def test_companion_charge_mode_sensor_shows_the_select_options(raw, shown):
 
     from custom_components.vag_connect.sensor import VagCompanionChargeModeSensor
 
-    vin = "WVWZZZAUZFW805377"
+    vin = "WVWZZZAUZFW000000"
     sensor = VagCompanionChargeModeSensor.__new__(VagCompanionChargeModeSensor)
     sensor._vin = vin
     sensor.coordinator = MagicMock()

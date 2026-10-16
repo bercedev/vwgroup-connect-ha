@@ -136,6 +136,17 @@ _SETUP_ERRORS: dict[str, str] = {
         "is nothing stored to retry with: choose Reauthenticate and scan the "
         "code again. Your vehicle data returns once the new session is in."
     ),
+    # #1813 follow-up — the same expiry on a brand whose app device-code client
+    # the manufacturer retired. The sentence above would send that user into the
+    # device_grant_retired banner, which is where @ratclma already was. The way
+    # back in is reconfigure with email and password, which merges onto the
+    # existing entry and keeps its history.
+    "device_login_grant_retired": (
+        "The sign-in session for this entry has expired and cannot be renewed: "
+        "the manufacturer switched off the app sign-in this brand used, so a "
+        "new code cannot be requested. Open the repair notice and sign in with "
+        "your email and password; the entry keeps its history and settings."
+    ),
     "too_many_requests": (
         "Account temporarily blocked (rate limit). Wait 15 minutes, then restart HA."
     ),
@@ -162,6 +173,7 @@ _SETUP_ERRORS: dict[str, str] = {
 # clear by itself, so it stays a retry.
 _HARD_AUTH_SETUP_ERRORS: frozenset[str] = frozenset({
     "device_login_expired",   # #1813 — only a new sign-in can fix it
+    "device_login_grant_retired",  # #1813 — same, but the code route is gone
     "terms_and_conditions",
     "marketing_consent",
     "two_factor_required",
@@ -276,8 +288,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: VagConnectConfigEntry) -
         ok = await coordinator.async_setup()
     except ValueError as err:
         reason = str(err)
+        _brand = entry.data.get(CONF_BRAND) or ""
+        # #1813 follow-up — the expired-sign-in notice tells the user to scan
+        # the code again, which is a dead end for the one brand whose app
+        # device-code client VW retired: the reauth flow routes it straight back
+        # to that client and shows the device_grant_retired banner. Same brand is
+        # live on the durable strategy, so brand alone cannot decide it — the
+        # stored strategy has to be read too. Reported by @ratclma, who hit the
+        # banner once more following our own advice.
+        if reason == "device_login_expired":
+            from .cariad.auth._device_grant import qr_signin_live  # noqa: PLC0415
+            _strategy = (entry.data.get("dag_initial_tokens") or {}).get(
+                "strategy", ""
+            )
+            if not qr_signin_live(_brand, _strategy):
+                reason = "device_login_grant_retired"
         from .repairs import raise_issue_auth_required  # noqa: PLC0415
-        raise_issue_auth_required(hass, entry.entry_id, reason)
+        # brand= was omitted here, so every auth repair raised on the setup path
+        # rendered its title as "VW Group" instead of naming the brand; the
+        # coordinator-path call has always passed it.
+        raise_issue_auth_required(hass, entry.entry_id, reason, brand=_brand)
         message = _SETUP_ERRORS.get(reason, str(err))
         # #909 — a hard auth failure gets the reauth prompt instead of looping
         # ConfigEntryNotReady retries forever (see _HARD_AUTH_SETUP_ERRORS).

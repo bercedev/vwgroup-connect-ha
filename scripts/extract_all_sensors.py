@@ -66,7 +66,7 @@ def _read_vin() -> str:
             line = line.strip()
             if line.startswith("vin:"):
                 return line[4:].strip()
-    return "WVWZZZAUZFW805377"
+    return "WVWZZZAUZFW000000"
 
 
 async def _try(session, name, url, headers):

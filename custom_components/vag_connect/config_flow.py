@@ -2512,16 +2512,41 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
         # no stored password (username is the BrandID `sub`), so the credential
         # form below can never succeed for them and leaves the user stuck. Route
         # them to re-run the QR sign-in, which updates the entry's tokens in place.
+        #
+        # #1813 — but only where that sign-in can still START. For a brand whose
+        # app device-code client the manufacturer retired, this hand-off lands on
+        # the device_grant_retired banner, and Home Assistant opens this flow by
+        # itself on every setup attempt (ConfigEntryAuthFailed →
+        # async_start_reauth_if_available), so the user is put there without
+        # clicking anything. @ratclma hit that wall six times and then once more
+        # on advice of mine that assumed the hand-off was enough.
+        #
+        # Where the code sign-in is gone, fall through to the credential form
+        # instead — but ASK FOR THE USERNAME TOO. The stored one is the BrandID
+        # `sub`, not an email address, so a password-only form cannot succeed
+        # either. ``_needs_username`` carries that one bit to the form and to the
+        # update below.
+        _needs_username = False
         if (
             reauth_entry is not None
             and reauth_entry.data.get("dag_initial_tokens")
             and not reauth_entry.data.get(CONF_PASSWORD)
         ):
-            return await self.async_step_reauth_qr()
+            from .cariad.auth._device_grant import qr_signin_live  # noqa: PLC0415
+            _strategy = (reauth_entry.data.get("dag_initial_tokens") or {}).get(
+                "strategy", ""
+            )
+            if qr_signin_live(reauth_entry.data.get(CONF_BRAND, ""), _strategy):
+                return await self.async_step_reauth_qr()
+            _needs_username = True
 
         if user_input is not None and reauth_entry is not None:
             brand    = reauth_entry.data[CONF_BRAND]
-            username = reauth_entry.data[CONF_USERNAME]
+            # #1813 — on a retired-grant entry the form supplies the real email;
+            # the stored value is the BrandID `sub` and would fail validation.
+            username = (
+                user_input.get(CONF_USERNAME) or reauth_entry.data[CONF_USERNAME]
+            )
             password = user_input[CONF_PASSWORD]
             spin     = user_input.get(CONF_SPIN, reauth_entry.data.get(CONF_SPIN, ""))
             country  = reauth_entry.data.get(CONF_COUNTRY, "us")
@@ -2568,6 +2593,7 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                     reauth_entry,
                     data={
                         **reauth_entry.data,
+                        CONF_USERNAME: username,
                         CONF_PASSWORD: password,
                         CONF_SPIN: spin,
                         # v4.7.7 (#1337) — bridge a Porsche login token so the
@@ -2579,19 +2605,32 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                 await self.hass.config_entries.async_reload(reauth_entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
 
+        # #1813 — a retired-grant entry needs the email as well, and deliberately
+        # with NO default: the stored value is an account UUID, and pre-filling it
+        # would invite the user to leave it and type only a password, which is the
+        # one thing that cannot work. An empty required field asks the question.
+        _schema: dict[Any, Any] = {}
+        if _needs_username:
+            _schema[vol.Required(CONF_USERNAME)] = _USERNAME_SELECTOR
+        _schema[vol.Required(CONF_PASSWORD)] = _PASSWORD_SELECTOR
+        _schema[vol.Optional(
+            CONF_SPIN,
+            default=reauth_entry.data.get(CONF_SPIN, "") if reauth_entry else "",
+        )] = _SPIN_SELECTOR
+
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=vol.Schema({
-                vol.Required(CONF_PASSWORD): _PASSWORD_SELECTOR,
-                vol.Optional(
-                    CONF_SPIN,
-                    default=reauth_entry.data.get(CONF_SPIN, "") if reauth_entry else "",
-                ): _SPIN_SELECTOR,
-            }),
+            data_schema=vol.Schema(_schema),
             errors=errors,
             description_placeholders={
                 "brand":    BRANDS.get(reauth_entry.data.get(CONF_BRAND, ""), "") if reauth_entry else "",
-                "username": reauth_entry.data.get(CONF_USERNAME, "") if reauth_entry else "",
+                # On a retired-grant entry the stored username is the account
+                # UUID; showing it as "your account" would be a lie and pasting it
+                # into the prompt would be worse. Blank it for that case.
+                "username": (
+                    "" if _needs_username
+                    else (reauth_entry.data.get(CONF_USERNAME, "") if reauth_entry else "")
+                ),
             },
         )
 

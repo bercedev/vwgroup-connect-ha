@@ -3,8 +3,9 @@
     "step": {
       "reauth_confirm": {
         "title": "Re-authenticate — {brand}",
-        "description": "The session for **{username}** has expired.\n\nPlease re-enter your password.",
+        "description": "The session for **{username}** has expired.\n\nPlease re-enter the details below. If an email address is asked for, this entry stores an internal account identifier rather than your address, so it is not filled in for you.",
         "data": {
+          "username": "Email Address",
           "password": "Password",
           "spin": "S-PIN"
         }
@@ -2562,7 +2563,7 @@
       "description": "Your Volkswagen account signed in and your garage was read, but the per-vehicle data requests (status, charging, climate) are being refused with HTTP 403 Forbidden, and the response carries a **device-attestation** marker.\n\nThis is a **server-side lockdown by VW**, not a subscription problem and not something a re-login can fix — so renewing Car-Net will not help. VW now requires a Google-signed device-attestation token (Firebase App Check / Play Integrity) that the official app mints from a hardened build, which an open-source client cannot reproduce.\n\nThe integration keeps showing the last data it cached. This warning clears by itself if VW reopens the data plane."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de read channel needs re-login",
+      "title": "Volkswagen.de read channel needs re-login — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -2638,6 +2639,10 @@
     "device_login_expired": {
       "title": "Sign in again to restore {brand}",
       "description": "The sign-in session for this entry has expired and could not be renewed on its own.\n\nThis entry was set up by scanning the sign-in code, so there are no stored credentials to retry with and nothing to correct. Choose **Reauthenticate** on the integration and scan the code again; the vehicle data returns as soon as the new session is in.\n\nUntil then the entities stay unavailable. This is not a wrong-password problem and it is nothing you did wrong."
+    },
+    "device_login_grant_retired": {
+      "title": "Restore {brand} with email and password",
+      "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
     }
   },
   "services": {

@@ -172,6 +172,22 @@ _SELECTIVESTATUS_UNSERVED_STRIKES = 3
 _SELECTIVESTATUS_UNSERVED_TTL = timedelta(hours=6)
 
 
+def _owner_nickname(value: Any, vin: str) -> str | None:
+    """Return the owner-set nickname, or ``None`` if absent / equal to the VIN.
+
+    myAudi/CARIAD defaults a vehicle "nickname" to the raw VIN when the owner
+    never renamed the car. That VIN guard therefore has to travel *with* the
+    nickname into its own field: dropping the nickname from the model slot
+    without this would merely relocate a full VIN into the nickname sensor.
+    """
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    if not trimmed or trimmed.upper() == vin.strip().upper():
+        return None
+    return trimmed
+
+
 def _bff_request_id(resp: Any) -> str | None:
     """Extract the async request id from a BFF 202 command response."""
     if not isinstance(resp, dict):
@@ -486,12 +502,19 @@ class VWEUClient(CariadBaseClient):
                 except AuthenticationError as err2:
                     raise PortalSessionExpiredError(str(err2)) from err2
             # Best-effort nickname enrichment from the relation endpoint.
+            # The portal's ``relation.vehicleNickname`` is owner-typed free
+            # text, so it belongs in its own ``nickname`` slot and never in
+            # ``model``: the model reaches public reporter issue titles, the
+            # HA device name and every entity_id. ``model`` stays present
+            # (as None) because the debug log below subscripts m["model"].
             self._vehicle_metadata: dict[str, dict[str, Any]] = {}
             for pvin in vins:
                 nick = await portal.get_relation_nickname(pvin)
                 if nick:
                     self._vehicle_metadata[pvin] = {
-                        "model": nick, "model_year": None,
+                        "model": None,
+                        "nickname": _owner_nickname(nick, pvin),
+                        "model_year": None,
                     }
             if not vins:
                 _LOGGER.warning(
@@ -543,18 +566,19 @@ class VWEUClient(CariadBaseClient):
         # Cache nickname/model per VIN — used in _parse_status to set device name
         # CARIAD returns: nickname (user-set in app), model, modelYear
         #
-        # Privacy guard: myAudi/CARIAD defaults the vehicle "nickname" to the
-        # raw VIN when the owner never renamed the car, so a naive
-        # ``nickname or model`` lands the full VIN in ``d.model`` — which then
-        # leaks into the public Vehicle Data Scout / Error Reporter issue
-        # titles. Drop any candidate that *is* the VIN before it becomes the
-        # model. (_reporter_pipeline._safe_model is the hard backstop, but
-        # filtering here keeps device names + diagnostics clean too.)
+        # Privacy guard: the owner-set "nickname" is person-typed free text,
+        # not a model designation, so it is NOT a _pick_model candidate. It
+        # used to head that tuple, which put it in ``d.model`` and from there
+        # into the public Vehicle Data Scout / Error Reporter issue titles,
+        # the HA device name and every entity_id for the car. It now goes to
+        # its own ``nickname`` slot (a redacted diagnostics key that already
+        # has its own sensor). The ==VIN check stays on the model fields too,
+        # since CARIAD has shipped the VIN in those as well.
+        # (_reporter_pipeline._safe_model is the hard backstop, but filtering
+        # here keeps device names + diagnostics clean too.)
         def _pick_model(v: dict[str, Any], vin: str) -> str | None:
             vin_u = vin.strip().upper()
             for candidate in (
-                v.get("nickname"),      # user-set name (e.g. "Golf GTE")
-                v.get("vehicleNick"),
                 v.get("model"),
                 v.get("carModel"),
             ):
@@ -568,6 +592,10 @@ class VWEUClient(CariadBaseClient):
         self._vehicle_metadata = {
             v["vin"]: {
                 "model": _pick_model(v, v["vin"]),
+                # Owner-typed name, kept OUT of the model slot (see above).
+                "nickname": _owner_nickname(
+                    v.get("nickname") or v.get("vehicleNick"), v["vin"]
+                ),
                 "model_year": v.get("modelYear") or v.get("model_year"),
                 # #1538 — VW's own drivetrain classification for the car, e.g.
                 # "CARNET_ENROLLMENT_APPLICATION:ICE" on a Golf GTD. Applied as an
@@ -849,8 +877,28 @@ class VWEUClient(CariadBaseClient):
             # otherwise a vw.de reporter's diagnostics carries no raw data to
             # ground the location / auth issues (#923 / #966).
             self.last_raw_responses = dict(getattr(web, "last_raw_responses", {}))
-            # #923/#1157 — surface the sole-mode probe outcomes too.
-            self.probe_outcomes = dict(getattr(web, "probe_outcomes", {}))
+            # #923/#1157 — surface the sole-mode probe outcomes too. Merged in
+            # place, NOT rebound: the line above may replace
+            # ``last_raw_responses`` because that one is re-populated per poll by
+            # design (base.py:282), but ``probe_outcomes`` is a long-lived sink
+            # that other code writes into — #1827's per-channel labels come from
+            # ``gather_and_merge`` by way of the coordinator, which runs AFTER
+            # every ``get_status`` in the same poll (coordinator.py:4620 before
+            # :4777; :4436 before :4465 at setup). Rebinding here dropped the
+            # previous poll's labels at the start of the next one and left the
+            # download with no channel lines for the whole window in between,
+            # which under that scheme reads as "not attempted". The proxy never
+            # writes a ``channel:`` key itself — only ``_record`` does — so there
+            # was nothing in the fresh copy to put them back. ``.update()`` is
+            # also what every other path already does with a connector's outcomes
+            # (base.py:624); this was the only unconditional rebind in the tree.
+            # Lazy-init guarded the same way base.py:622 does it, because this
+            # client is built via ``__new__`` without ``__init__`` throughout the
+            # suite (see the note at :430) — the attribute can be absent, and a
+            # bare ``.update()`` would raise where the old rebind quietly worked.
+            if not isinstance(getattr(self, "probe_outcomes", None), dict):
+                self.probe_outcomes = {}
+            self.probe_outcomes.update(getattr(web, "probe_outcomes", None) or {})
             return web_data
 
         # v2.12.0 — EU Data Act portal mode (read-only fallback). When the
@@ -3784,10 +3832,16 @@ class VWEUClient(CariadBaseClient):
                 ),
             )
 
-        # ── Model name from vehicles list (nickname set in app) ────────────────
+        # ── Model name + owner nickname from the vehicles list ────────────────
+        # Two distinct slots on purpose: ``model`` is a generic designation
+        # that may be published in a public reporter issue title and drives
+        # the HA device name, while ``nickname`` is owner-typed text that
+        # stays in the redacted ``vehicle_nickname`` field.
         meta = getattr(self, "_vehicle_metadata", {}).get(vin, {})
         if meta.get("model"):
             d.model = meta["model"]
+        if meta.get("nickname"):
+            d.vehicle_nickname = meta["nickname"]
         # The REST vehicles-list often carries NO model name (e.g. an Audi S6
         # returns an empty ``model``, so the device fell back to "Audi (2021)").
         # The vgql media block we already fetch for render images also carries

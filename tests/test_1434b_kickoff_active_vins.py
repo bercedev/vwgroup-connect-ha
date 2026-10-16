@@ -26,8 +26,8 @@ _MOD = "custom_components.vag_connect.coordinator"
 _SCRAPER = "custom_components.vag_connect.cariad.auth._data_act_scraper.DataActScraper"
 _SESSION = "homeassistant.helpers.aiohttp_client.async_get_clientsession"
 
-VIN_ACTIVE = "WVWZZZ3CZ9W025570"
-VIN_DISABLED = "WVGZZZE27PP016396"  # a sold car, device disabled by the user
+VIN_ACTIVE = "WVWZZZ3CZ9W000000"
+VIN_DISABLED = "WVGZZZE27PP000000"  # a sold car, device disabled by the user
 
 
 def _registry_with_disabled(vin: str):

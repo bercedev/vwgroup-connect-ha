@@ -49,6 +49,7 @@ from aiohttp import ClientConnectionError, ClientSession, ClientTimeout
 from .._util import drop_charge_sentinel, drop_odometer_sentinel
 from ..exceptions import (
     AuthenticationError,
+    CariadError,
     EmailTwoFactorRequiredError,
     MarketingConsentError,
     PortalInteractionRequiredError,
@@ -6156,6 +6157,41 @@ class EUDataActConnector:
         if self._bearer:
             self.logged_in = True
             return
+
+        # #1842 (@ColinSainsbury, a Cupra, 2026-10-16) — the same closed-session
+        # race as #1834, one function over. His report carries TWO tracebacks
+        # from one incident: the first is get_vehicle_data -> _get_json, which
+        # the guard in that function now answers, and the second is
+        # get_status -> login -> _login_impl -> aiohttp's __aenter__ with the
+        # bare RuntimeError("Session is closed").
+        #
+        # That second path was left unguarded on purpose, on the grounds that a
+        # login beginning after the entry unloaded is not the poll loop and that
+        # nobody had traced whether something upstream converted the error. The
+        # trace settles it: login() catches TimeoutError and
+        # ClientConnectionError, stores anything else as _login_error and
+        # re-raises it unchanged, so a RuntimeError travels straight to the
+        # error reporter and a shutdown race is filed as a crash. Reported, not
+        # hypothetical, so the reason for leaving it open is gone.
+        #
+        # Checked here rather than in login()'s handler because this is the
+        # first thing the function does that could touch the network, and
+        # because the bearer path above must keep returning without a check it
+        # does not need. CariadError and not AuthenticationError: the caller
+        # replays the password on an auth error, which cannot help a session
+        # that no longer exists.
+        if getattr(self._session, "closed", False) is True:
+            _LOGGER.debug(
+                "EU Data Act: the entry's session is closed, so the portal "
+                "login was not started (the entry is unloading or reloading)"
+            )
+            raise CariadError(
+                "EU Data Act: the connection was closed before the portal "
+                "login could start. That happens when the integration entry "
+                "is unloaded or reloaded; nothing is wrong with the account, "
+                "and the next setup opens a new one."
+            )
+
         headers = {"User-Agent": _USER_AGENT}
 
         # 1. Start OIDC directly at the IDP (portal's own servlet 500s for
@@ -6474,7 +6510,65 @@ class EUDataActConnector:
         # times before giving up as "no data this poll", recovering polls the
         # portal would otherwise drop. A 404/410 (request not provisioned)
         # returns immediately; a real 401/403 still raises.
+        # #1834 (@travel-and-cache) — the session this connector was handed is
+        # the entry's own, created with async_create_clientsession
+        # (coordinator.py:1592), and the comment there says it: "unloading the
+        # entry closes it; there is nothing to unwind by hand." So a poll still
+        # in flight when the entry unloads or reloads reaches a closed session,
+        # and aiohttp answers with a bare RuntimeError("Session is closed").
+        # Nothing caught it: the handler below takes TimeoutError and
+        # ClientConnectionError, a RuntimeError is neither, and the error
+        # reporter has no exclusion list — so a shutdown race was filed as a
+        # crash on 4.13.0.
+        #
+        # Checked here rather than in the handler because retrying is the one
+        # thing that cannot help: the session will not reopen, and the retry
+        # loop would burn its three backoff sleeps before giving up.
+        #
+        # NOT raised as UpstreamUnavailableError, even though that type is
+        # already imported and would have been the quick move: its message tells
+        # the user "server-side issue at VW … do NOT reconfigure", and this is
+        # our own session going away locally. A false explanation is worse than
+        # a plain one.
         for attempt in range(len(_PORTAL_RETRY_DELAYS) + 1):
+            # Checked on EVERY attempt, not once before the loop. The first
+            # version of this guard sat above the loop, on the reasoning that
+            # retrying a closed session cannot help - true, and it left the
+            # larger hole open. A retriable 5xx sleeps 3 s and then 6 s
+            # (_PORTAL_RETRY_DELAYS) and comes back here, so an entry unloaded
+            # during that sleep re-entered the request with no check at all and
+            # the bare RuntimeError escaped exactly as in #1834. Measured: two
+            # requests, one 3 s sleep, RuntimeError out of both the soft and the
+            # hard path. The window is seconds wide rather than one await long,
+            # and portal 5xx storms are documented in this very file, so it is
+            # the likelier of the two races, not the edge case.
+            #
+            # One check at the top of the body covers entry and every re-entry,
+            # which is why the pre-loop copy is gone rather than kept alongside.
+            #
+            # ``is True`` and not merely truthy: most tests here hand the
+            # connector a MagicMock, whose auto-created ``.closed`` attribute is
+            # a Mock and therefore truthy, which made this guard swallow nine
+            # live tests the first time it was written. aiohttp's
+            # ClientSession.closed is a real bool property, so the strict test is
+            # exact for the thing that matters and inert for every stand-in.
+            if getattr(self._session, "closed", False) is True:
+                _LOGGER.debug(
+                    "EU Data Act: the entry's session is closed, so %s was not "
+                    "attempted on try %d (the entry is unloading or reloading; "
+                    "the next setup gets a fresh session)",
+                    _safe_api_url(url),
+                    attempt + 1,
+                )
+                if soft:
+                    return None
+                raise CariadError(
+                    "EU Data Act: the connection was closed while this read "
+                    "was in flight. That happens when the integration entry is "
+                    "unloaded or reloaded; nothing is wrong with the account, "
+                    "and the next setup opens a new one."
+                )
+
             try:
                 async with self._session.get(
                     url, headers=eff_headers, timeout=ClientTimeout(total=_TIMEOUT_S),

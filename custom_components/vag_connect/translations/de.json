@@ -3,8 +3,9 @@
     "step": {
       "reauth_confirm": {
         "title": "Erneut anmelden — {brand}",
-        "description": "Die Anmeldung für **{username}** ist abgelaufen.\n\nBitte Passwort erneut eingeben.",
+        "description": "Die Sitzung für **{username}** ist abgelaufen.\n\nBitte gib die Angaben unten erneut ein. Falls eine E-Mail-Adresse verlangt wird: dieser Eintrag speichert eine interne Konto-Kennung und nicht deine Adresse, deshalb wird sie nicht vorausgefüllt.",
         "data": {
+          "username": "E-Mail-Adresse",
           "password": "Passwort",
           "spin": "S-PIN (optional, für Türverriegelung)"
         }
@@ -2558,7 +2559,7 @@
       "description": "Dein Volkswagen-Konto hat sich angemeldet und deine Garage wurde gelesen, aber die fahrzeugbezogenen Datenanfragen (Status, Laden, Klima) werden mit HTTP 403 Forbidden abgewiesen, und die Antwort trägt eine **Geräte-Attestierungs**-Markierung.\n\nDies ist eine **serverseitige Sperre durch VW**, kein Abonnement-Problem und nichts, was eine erneute Anmeldung beheben kann — eine Erneuerung von Car-Net hilft also nicht. VW verlangt jetzt ein Google-signiertes Geräte-Attestierungs-Token (Firebase App Check / Play Integrity), das die offizielle App aus einem gehärteten Build erzeugt und das ein Open-Source-Client nicht nachbilden kann.\n\nDie Integration zeigt weiterhin die zuletzt zwischengespeicherten Daten an. Diese Warnung verschwindet von selbst, falls VW die Datenebene wieder öffnet."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-Lesekanal braucht erneute Anmeldung",
+      "title": "Volkswagen.de-Lesekanal braucht erneute Anmeldung — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -2638,6 +2639,10 @@
     "device_login_expired": {
       "title": "Neu anmelden, um {brand} wiederherzustellen",
       "description": "Die Anmelde-Sitzung dieses Eintrags ist abgelaufen und konnte sich nicht von selbst erneuern.\n\nDieser Eintrag wurde per Anmelde-Code eingerichtet, es sind also keine Zugangsdaten gespeichert, mit denen ein neuer Versuch möglich wäre, und es gibt nichts zu korrigieren. Wähle bei der Integration **Neu authentifizieren** und scanne den Code erneut; die Fahrzeugdaten kommen zurück, sobald die neue Sitzung steht.\n\nBis dahin bleiben die Entitäten nicht verfügbar. Es ist kein Passwort-Problem und du hast nichts falsch gemacht."
+    },
+    "device_login_grant_retired": {
+      "title": "{brand} mit E-Mail und Passwort wiederherstellen",
+      "description": "Die Anmelde-Sitzung dieses Eintrags ist abgelaufen und lässt sich nicht erneuern.\n\nDieser Eintrag wurde über die Code-Anmeldung eingerichtet, und dieser Weg ist zu: Der Hersteller hat die App-Anmeldung dieser Marke abgeschaltet, ein neuer Code kann also nicht mehr angefordert werden. Das ist kein Passwort-Problem und du hast nichts falsch gemacht.\n\nWähle **Reparieren** und melde dich mit E-Mail und Passwort an. Der Eintrag behält seine Historie, seine Einstellungen und seine Entitätsnamen, es muss also nichts gelöscht und neu angelegt werden.\n\nBis dahin bleiben die Entitäten nicht verfügbar."
     }
   },
   "selector": {

@@ -38,7 +38,7 @@ def test_model_falls_back_to_vgql_long_name():
 
 def test_rest_model_still_wins_when_present():
     c = _client(
-        {"VINX": {"model": "Golf GTE"}},   # user nickname / REST model present
+        {"VINX": {"model": "Golf GTE"}},   # REST model present
         {"VINX": VehicleImageData(vin="VINX", image_urls={}, long_name="VW Golf")},
     )
     d = c._parse_status("VINX", {}, parking={})

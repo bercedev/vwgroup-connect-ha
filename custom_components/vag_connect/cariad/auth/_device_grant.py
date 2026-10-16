@@ -684,6 +684,48 @@ def mbb_dag_backup_config(brand_name: str) -> tuple[str, str] | None:
     return MBB_DAG_CLIENT_ID_BACKUP, MBB_DAG_SCOPE
 
 
+# ── Which passwordless sign-ins can still be STARTED ─────────────────────────
+# #1364 — Audi's app device-code client answers 403 unauthorized_client, so an
+# Audi entry tagged strategy="device_grant" has no way back in: the reauth flow
+# routes it to that same client and lands on the device_grant_retired banner.
+# @ratclma hit that banner six times, and then a seventh on advice of ours that
+# assumed the code sign-in was still reachable (#1813).
+#
+# A named set rather than a comparison inlined in the classifier, because this
+# is the third retirement, not a special case: VW pulled Škoda's grant in
+# 2026-08 (dropped from DAG_ENABLED_BRANDS outright) and never enabled the VW EU
+# consumer client. A fourth costs one line here.
+#
+# Deliberately NOT removed from DAG_ENABLED_BRANDS. That set keeps "audi" so the
+# brand picker can explain the retirement instead of silently hiding it, which is
+# the dead end #1364 exists to fix — see the long note above that set.
+DAG_RETIRED_BRANDS = frozenset({"audi"})
+
+
+def qr_signin_live(brand_name: str, strategy: str) -> bool:
+    """Can a passwordless entry of this shape still START a code sign-in?
+
+    This answers about the CLIENT, not about whether a config flow can produce
+    the pair. ``("audi", "mbb")`` answers True because the e-Remote client is
+    live, even though no flow writes ``dag_initial_tokens`` for it today: both
+    Audi MBB paths attach their tokens to an entry that already has a password.
+    Keeping those two questions apart is what stops this collapsing into a brand
+    blocklist, which would also refuse Audi's working durable login the day a
+    flow does offer it.
+
+    Read by the setup ladder to decide whether the expired-session notice may
+    tell the user to scan the code again, or has to send them to reconfigure
+    with email + password instead. An unrecognised strategy answers False: a
+    sign-in we cannot show is reachable must not be advertised as the way out.
+    """
+    brand = brand_name.lower()
+    if strategy == "mbb":
+        return brand in MBB_DAG_BRANDS
+    if strategy in ("device_grant", "device_grant_portal"):
+        return brand in DAG_ENABLED_BRANDS and brand not in DAG_RETIRED_BRANDS
+    return False
+
+
 # ── VW EU Two-Way (modern CARIAD BFF) — device-grant client 650d46ca ──────────
 # 2026-08-18 — a VW-EU app client that is BOTH device-code-mintable AND
 # CARIAD-BFF-whitelisted, unlike the DAG-dead app client (a24fba63) and the

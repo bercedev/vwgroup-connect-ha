@@ -187,8 +187,8 @@ focus on one brand. By maintaining authoritative `.bru` collections
 for every brand, we become the **reference implementation +
 documentation** for the entire VAG-HA ecosystem.
 
-That's the v2.0.0 + EU Data Act (Sept 2026) play — see
-`docs/HACS-CHECKLIST.md` "Outstanding" section.
+That's the v2.0.0 + EU Data Act (Sept 2026) play — the live plan is in
+`docs/ROADMAP.md`.
 
 ## References
 

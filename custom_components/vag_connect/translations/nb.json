@@ -5,6 +5,7 @@
         "title": "Logg inn på nytt — {brand}",
         "description": "Økten for **{username}** har utløpt.\n\nSkriv inn passordet ditt på nytt.",
         "data": {
+          "username": "E-postadresse",
           "password": "Passord",
           "spin": "S-PIN"
         }
@@ -2558,7 +2559,7 @@
       "description": "Volkswagen-kontoen din logget inn og garasjen din ble lest, men de kjøretøyspesifikke dataforespørslene (status, lading, klima) avvises med HTTP 403 Forbidden, og responsen bærer en markør for **enhetsattestasjon**.\n\nDette er en **serversidesperre fra VW**, ikke et abonnementsproblem og ikke noe en ny innlogging kan fikse — så å fornye Car-Net vil ikke hjelpe. VW krever nå et Google-signert token for enhetsattestasjon (Firebase App Check / Play Integrity) som den offisielle appen oppretter fra en herdet bygg, og som en åpen kildekode-klient ikke kan gjenskape.\n\nIntegrasjonen fortsetter å vise de sist bufrede dataene. Denne advarselen forsvinner av seg selv hvis VW åpner dataplanet igjen."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-lesekanalen må logge inn igjen",
+      "title": "Volkswagen.de-lesekanalen må logge inn igjen — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
@@ -2638,6 +2639,10 @@
     "device_login_expired": {
       "title": "Logg inn igjen for å gjenopprette {brand}",
       "description": "The sign-in session for this entry has expired and could not be renewed on its own.\n\nThis entry was set up by scanning the sign-in code, so there are no stored credentials to retry with and nothing to correct. Choose **Reauthenticate** on the integration and scan the code again; the vehicle data returns as soon as the new session is in.\n\nUntil then the entities stay unavailable. This is not a wrong-password problem and it is nothing you did wrong."
+    },
+    "device_login_grant_retired": {
+      "title": "Gjenopprett {brand} med e-post og passord",
+      "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
     }
   },
   "services": {

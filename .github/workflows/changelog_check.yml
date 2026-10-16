@@ -23,7 +23,7 @@ jobs:
       - name: Prüfen ob CHANGELOG.md geändert wurde
         run: |
           FILES=$(git diff --name-only origin/main...HEAD)
-          if ! echo "$FILES" | grep -qE '^(custom_components/|CHANGELOG\.md$|docs/CHANGELOG_TECHNICAL\.md$)'; then
+          if ! echo "$FILES" | grep -qE '^(custom_components/|CHANGELOG\.md$)'; then
             echo "Kein Integrations-Code geändert (nur Doku/CI/Tests) — CHANGELOG-Pflicht gilt hier nicht."
             exit 0
           fi

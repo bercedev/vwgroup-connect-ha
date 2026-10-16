@@ -62,7 +62,7 @@ class TestSkodaOutsideTemperatureBlock:
                 cur = cur.get(k)
             return cur
 
-        veh = VehicleData(vin="TMBJR8NX2RY179915")
+        veh = VehicleData(vin="TMBJR8NX2RY000000")
         outside_t = v(ac, "outsideTemperature", "temperatureValue")
         if outside_t is not None:
             unit = v(ac, "outsideTemperature", "temperatureUnit")
@@ -164,7 +164,7 @@ class TestSkodaPreferredWorkshopBlock:
                 cur = cur.get(k)
             return cur
 
-        veh = VehicleData(vin="TMBJR8NX2RY179915")
+        veh = VehicleData(vin="TMBJR8NX2RY000000")
         workshop = v(maintenance, "preferredServicePartner")
         if isinstance(workshop, dict) and workshop:
             trimmed = {

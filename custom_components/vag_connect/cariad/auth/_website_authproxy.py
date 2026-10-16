@@ -217,6 +217,35 @@ _URL_UUID_RE = re.compile(
 _URL_VIN_RE = re.compile(r"\b[A-HJ-NPR-Z0-9]{17}\b")
 
 
+# #1827 — VW inserted an OPTIONAL advertising opt-in into the login chain on
+# 2026-10-13/14 ("Personalised advertising tailored to your requirements"). It is
+# NOT the marketing-consent page the IDP already served: different host and path
+# (``consent.vwgroup.io/hooks/<name>`` rather than
+# ``identity.vwgroup.io/v2/login/ui/marketing-consent``). The page offers a plain
+# "Not now" link; following it answers 302 to the IDP's action-hook continue
+# endpoint and the login finishes on the portal as before.
+#
+# Two reporters hit this within the same hours and the landing shows up in their
+# logs as the generic "refresh did not land on the portal", because the chain
+# simply ends on a host that is not volkswagen.de. Independently reported on
+# another integration riding the same authproxy channel.
+#
+# WE DECLINE, ALWAYS, AND NEVER ACCEPT. The opt-in is optional advertising
+# consent, and an integration has no business agreeing to that on a car owner's
+# behalf — declining is both the honest default and what the page's own "Not
+# now" does. Only a skip link the PAGE offers is followed, never one we build,
+# so if VW stops offering it we stop skipping rather than guessing a URL.
+#
+# Matched by SHAPE (``/hooks/<anything>/skip``) rather than by the one hook name
+# observed, so a second hook of the same kind needs no code change. The host is
+# pinned, so the shape cannot match somewhere it was never meant to.
+_ACTION_HOOK_HOST = "consent.vwgroup.io"
+_ACTION_HOOK_SKIP_RE = re.compile(
+    r"""href\s*=\s*["'](?P<href>[^"']*/hooks/[^"']*/skip\?[^"']*)["']""",
+    re.IGNORECASE,
+)
+
+
 def _safe_url(url: str) -> str:
     """Host+path of *url*, query + fragment stripped, UUID + VIN path segments masked."""
     try:
@@ -1149,6 +1178,15 @@ class WebsiteAuthProxyConnector:
 
         # 3. Email-OTP challenge? Stash the challenge URL + state and bail out
         #    so the UI can collect the code.
+        # #1827 — the interactive path lands on the same hook. Decline it here
+        # too, before the OTP test and before _finalise_login's host check,
+        # which would otherwise read the interstitial as "login did not
+        # complete".
+        _declined = await self._decline_action_hook(landed, landed_html)
+        if _declined is not None:
+            landed, landed_status = _declined
+            landed_html = ""
+
         if "/u/email-challenge" in landed or "/u/mfa" in landed:
             self._otp_url = landed
             self._otp_html = landed_html
@@ -1188,6 +1226,7 @@ class WebsiteAuthProxyConnector:
         fields, action = _login_fields(self._otp_html or "")
         code_clean = str(code).strip()
         matched = False
+        matched_keys: list[str] = []
         for key in list(fields):
             kl = key.lower()
             if kl in (
@@ -1196,12 +1235,42 @@ class WebsiteAuthProxyConnector:
             ):
                 fields[key] = code_clean
                 matched = True
+                matched_keys.append(key)
             elif "remember" in kl:
                 fields[key] = "true"
         if not matched:
             fields["code"] = code_clean
         if self._otp_state:
             fields.setdefault("state", self._otp_state)
+
+        # #1827 — this method had NO logging at all, while begin_login above has
+        # five lines. Two reporters hit the email-OTP step within the same hours
+        # and one attached a full debug log: it ends at "email-OTP challenge
+        # pending" and says nothing about the step that failed, so the log could
+        # not distinguish the two causes. That is the #1712 lesson repeating —
+        # the line that identifies the failure has to exist before the report.
+        #
+        # The FIELD NAMES are the load-bearing fact. The whole reason the
+        # matching loop above exists (v2.14.10, and its test
+        # tests/test_v21410_otp_field_name.py) is that the IDP's code input is
+        # not always called "code": when none of the recognised names is present
+        # the fallback writes "code", the IDP reads that as "no code entered",
+        # re-issues a FRESH challenge — a new email — and the flow bounces on
+        # the challenge page for ever. Both reporters describe exactly that
+        # shape. If the IDP has renamed the field again, this line says so in
+        # one glance instead of costing a round of "please enable debug first".
+        #
+        # Names only, never values: ``fields`` holds the code, the _csrf and the
+        # hmac. Iterating the dict yields keys, and the code is not logged
+        # anywhere here or below.
+        _LOGGER.debug(
+            "Website authproxy submit_otp: %s; form fields: %s",
+            f"code set on {', '.join(matched_keys)}" if matched
+            else "NO recognised code field in the form — fell back to 'code', "
+                 "which the IDP may read as no code entered",
+            ", ".join(sorted(fields)),
+        )
+
         post_url = _resolve_action(self._otp_url, action)
         async with self._session.post(
             post_url,
@@ -1213,9 +1282,34 @@ class WebsiteAuthProxyConnector:
             landed = str(resp.url)
             landed_html = await resp.text(errors="replace")
             landed_status = resp.status
+            landed_chain = self._redirect_hosts(
+                getattr(resp, "history", ()), landed,
+            )
+
+        # Same shape as the two begin_login lines, so a reporter's log reads as
+        # one flow. ``_redirect_hosts`` emits hostnames only — it drops paths and
+        # query strings on purpose, because the OAuth state and any tokens live
+        # in the query.
+        _LOGGER.debug(
+            "Website authproxy submit_otp POST → status %s, chain: %s",
+            landed_status, landed_chain,
+        )
 
         if landed_status >= 400 or "email-challenge" in landed:
             err = _login_error(landed_html)
+            # Which of the two conditions fired, and whether the page carried an
+            # error at all. The page's own text is NOT logged: it is the IDP's
+            # message, it can name the account, and it already travels to the
+            # user in the exception below — logging it here would add a second
+            # place for it to escape and no new information.
+            _LOGGER.debug(
+                "Website authproxy submit_otp rejected: %s at %s; "
+                "page error text: %s",
+                f"HTTP {landed_status}" if landed_status >= 400
+                else "landed back on the email-challenge page",
+                _safe_url(landed),
+                "present" if err else "none",
+            )
             raise AuthenticationError(
                 err or "Website authproxy: OTP rejected — check the code"
             )
@@ -1309,6 +1403,17 @@ class WebsiteAuthProxyConnector:
             ) as resp:
                 landed = str(resp.url)
                 status = resp.status
+                # #1827 — the body is needed only to find a consent hook's skip
+                # link, so it is read only when the chain ended on that one
+                # host. Reading it for every off-portal landing would fetch and
+                # discard a page on each dead-resume poll, and it would also
+                # demand a ``text()`` from every existing test double that lands
+                # off-portal for an unrelated reason.
+                landed_html = (
+                    await resp.text(errors="replace")
+                    if urlparse(landed).hostname == _ACTION_HOOK_HOST
+                    else ""
+                )
         except TooManyRedirects as exc:
             # Same contract as begin_login: surface a normal auth failure so the
             # caller re-authenticates instead of a raw aiohttp error reaching
@@ -1340,9 +1445,20 @@ class WebsiteAuthProxyConnector:
         # host-aware check (see its landing test); this brings ``refresh`` in
         # line with it.
         landed_parts = urlparse(landed)
+        on_portal = landed_parts.netloc == urlparse(_SITE_BASE).netloc
+        # #1827 — before any verdict: an optional consent hook is not a dead
+        # session. Decline it and judge where the login actually ended up, so
+        # the clauses below see the real landing instead of the interstitial.
+        if not on_portal:
+            _declined = await self._decline_action_hook(landed, landed_html)
+            if _declined is not None:
+                landed, status = _declined
+                landed_parts = urlparse(landed)
+                on_portal = (
+                    landed_parts.netloc == urlparse(_SITE_BASE).netloc
+                )
         landed_host = landed_parts.hostname or ""
         landed_path = landed_parts.path or ""
-        on_portal = landed_parts.netloc == urlparse(_SITE_BASE).netloc
         # Log the chain unconditionally — hostnames only, so no OAuth state or
         # token ever reaches the log. Previously only the redirect-loop branch
         # logged it, which left a reporter's debug log unable to show where the
@@ -1480,6 +1596,57 @@ class WebsiteAuthProxyConnector:
                 " on the reactive path this cycle)",
                 type(exc).__name__,
             )
+
+    async def _decline_action_hook(
+        self, landed: str, html: str
+    ) -> "tuple[str, int] | None":
+        """Decline an optional consent hook; return where the login then went.
+
+        ``None`` means the caller's own verdict stands: either this is not such
+        a hook, or the page offered no skip link. Both are deliberately
+        non-fatal here — this method only ever removes a blocker, it never
+        creates one.
+        """
+        if urlparse(landed).hostname != _ACTION_HOOK_HOST:
+            return None
+        match = _ACTION_HOOK_SKIP_RE.search(html or "")
+        if match is None:
+            _LOGGER.debug(
+                "Website authproxy: landed on a consent hook at %s with no skip "
+                "link on the page — leaving the verdict to the caller",
+                _safe_url(landed),
+            )
+            return None
+        _LOGGER.debug(
+            "Website authproxy: declining the optional consent hook at %s",
+            _safe_url(landed),
+        )
+        try:
+            async with self._session.get(
+                _resolve_action(landed, match.group("href")),
+                headers=self._headers({"Referer": landed}),
+                allow_redirects=True,
+                max_redirects=_MAX_SSO_REDIRECTS,
+                timeout=ClientTimeout(total=_TIMEOUT_S),
+            ) as resp:
+                after = str(resp.url)
+                after_status = resp.status
+                after_chain = self._redirect_hosts(
+                    getattr(resp, "history", ()), after,
+                )
+        except (TooManyRedirects, ClientError, TimeoutError) as err:
+            # Declining is best-effort: if it fails, the caller raises the same
+            # thing it would have raised without us.
+            _LOGGER.debug(
+                "Website authproxy: declining the consent hook failed (%s)",
+                type(err).__name__,
+            )
+            return None
+        _LOGGER.debug(
+            "Website authproxy: after declining → status %s, chain: %s",
+            after_status, after_chain,
+        )
+        return after, after_status
 
     def _finalise_login(self, landed_url: str) -> None:
         """Mark logged-in iff we ended back on the volkswagen.de host, and the
@@ -2019,6 +2186,16 @@ class WebsiteAuthProxyConnector:
         """
         if vin in self._vin_backend:
             return
+        # #1827 — the relations read already walled for this VIN on this poll.
+        # ``get_relations`` is the only thing this method can ask, so re-asking
+        # buys a guaranteed second 401 and, worse, re-raises it into whichever
+        # read called us — which is how a single relations wall used to cost the
+        # warning-lights and lock-history reads too, each on a realm that may
+        # well have answered. Leave the WeConnect default in place, exactly as
+        # the non-auth branch below already does, and let the caller's own
+        # endpoint decide.
+        if vin in getattr(self, "_relations_walled", ()):
+            return
         try:
             await self.get_relations()
         except AuthenticationError:
@@ -2367,16 +2544,40 @@ class WebsiteAuthProxyConnector:
         self._images_cache[vin] = (time.monotonic(), images)
         return images
 
+    def _tail_read_was_fresh(self, vin: str, since: float) -> bool:
+        """Did a tail read actually reach the backend for *vin* this poll?
+
+        #1827 — ``get_master_data`` serves ``_master_cache`` for 24 h without any
+        network read, and past the TTL it returns the stale cached value when both
+        of its reads soft-fail; ``get_exterior_images`` does the same over 6 h.
+        Neither rewrites the cache stamp on those paths, so a stamp at or after
+        the poll's start is exactly "this poll got an answer out of the session" —
+        the thing the tail decision means to test, and the only thing a cache hit
+        cannot fake.
+        """
+        for _cache in (
+            getattr(self, "_master_cache", None),
+            getattr(self, "_images_cache", None),
+        ):
+            if not _cache:
+                continue
+            _entry = _cache.get(vin)
+            if _entry is not None and _entry[0] >= since:
+                return True
+        return False
+
     async def get_vehicle_data(self, vin: str) -> VehicleData:
         """Fetch charging + maintenance + live-status for *vin* → ``VehicleData``.
 
         Every read is ``soft`` / fail-soft — a transient backend hiccup or a
         parse-miss on any one leaves the corresponding fields unset instead of
-        failing the whole poll. A real 401/403 on the CORE reads (the relations
-        preflight / charging / maintenance) propagates so the caller re-logs in;
-        the optional live-status reads and any 412 precondition degrade to
-        no-data instead. The vehicle is marked online once any data block parsed
-        successfully.
+        failing the whole poll. A real 401/403 on a CORE read (the relations
+        preflight / charging / maintenance) no longer aborts the poll on its own:
+        each is recorded and the remaining reads still run, and the decision at
+        the end propagates only when neither a core read nor a tail read got an
+        answer out of the session (#1827). The optional live-status reads and any
+        412 precondition degrade to no-data instead. The vehicle is marked online
+        once any data block parsed successfully.
 
         v2.16.0 (BETA, opt-in) — three additive read-path fields, all
         disabled-by-default at the sensor layer (unvalidated live endpoints):
@@ -2387,6 +2588,11 @@ class WebsiteAuthProxyConnector:
         """
         d = VehicleData(vin=vin)
         got_data = False
+        # #1827 — monotonic start of THIS poll. The tail decision at the end has
+        # to tell a fresh read apart from a cache hit, and the two tail caches
+        # already stamp themselves on their fresh-write path only; comparing
+        # their stamp against this is enough, so no parallel bookkeeping.
+        _poll_t0 = time.monotonic()
         # v4.7.11 (#465, toglo) — a per-car vw.de wall (401/403/412->Auth on a
         # core read: relations / charging / maintenance / the relation-detail
         # fallback) used to abort the whole poll BEFORE the tail reads below, so a
@@ -2399,17 +2605,62 @@ class WebsiteAuthProxyConnector:
         # flight so the wall is attributable in the log + diagnostics.
         _core_exc: AuthenticationError | APIError | None = None
         _core_read = "relations"
+        # #1827 — set only by the relations AUTH wall below, never by the generic
+        # branch beside it, because the two need different treatment at the
+        # relation-detail fallback further down.
+        _rels_walled = False
+        # The same fact, reachable from ``_ensure_backend`` further down the call
+        # stack. Keyed by VIN rather than a bare flag because several cars share
+        # one connector, and cleared at the top of every poll so it describes
+        # THIS poll — a sticky marker would keep suppressing the platform probe
+        # long after the session recovered.
+        if not hasattr(self, "_relations_walled"):
+            self._relations_walled: set[str] = set()
+        self._relations_walled.discard(vin)
 
         # Resolve the car's platform (MBB/MEB) up front so the live-status reads
         # below pick the correct gdc, and reuse the parsed relations for the
-        # nickname/plate enrich at the end (one relations fetch, not two). A
-        # genuine 401/403 here propagates (dead session → re-login).
+        # nickname/plate enrich at the end (one relations fetch, not two).
         try:
             rels: AuthproxyRelations | None = None
             try:
                 rels = await self.get_relations()  # also populates self._vin_backend
-            except AuthenticationError:
-                raise
+            except AuthenticationError as exc:
+                # #1827 (Fishermanjb) — a 401 here used to re-raise, unwinding
+                # past the five remaining core reads (charging, maintenance, fuel
+                # and the three trip memories). His car's relations endpoint was
+                # walled while master data on the same poll answered, so charging
+                # never ran, the vw.de snapshot carried no battery_soc, and the
+                # merge correctly kept the batch feed's last capture — a SoC
+                # several days old next to a live-looking channel.
+                #
+                # This is the veto #1 already removed for charging-vs-maintenance,
+                # one read further up: relations is realm vw-de, charging is realm
+                # vwag-weconnect, so a wall on the first is not proof the session
+                # is dead. Record it, fall through, and let the tail decision at
+                # the end make the live/dead call — it already does, and it is the
+                # function's only dead-session gate.
+                #
+                # Cost when the car is NOT MEB: get_relations is the sole writer
+                # of self._vin_backend, so after a wall _gdc falls back to the
+                # WeConnect gdc, which an MBB car answers with 412 on all six
+                # gdc-carrying reads. Each degrades to None plus a
+                # "412 precondition (wrong-platform gdc?)" entry in diagnostics,
+                # which is why that label exists. Not a new failure mode: the
+                # non-auth branch below has fallen through with an unresolved gdc
+                # since #1659 (see tests/test_1709_h2_response_signatures.py) —
+                # this widens that window to the auth case rather than opening it.
+                _core_exc = exc
+                _rels_walled = True
+                self._relations_walled.add(vin)
+                self.probe_outcomes["vwde_core_read:relations"] = (
+                    _http_status_from_exc(exc)
+                )
+                _LOGGER.info(
+                    "vw.de relations preflight walled for %s (%s); running the "
+                    "remaining core reads anyway (#1827)",
+                    vin[-6:], exc,
+                )
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.debug(
                     "Website authproxy relations preflight skipped for %s (%s)",
@@ -2573,9 +2824,30 @@ class WebsiteAuthProxyConnector:
                     match = next(
                         (v for v in rels.vehicles if v.vin == vin), None
                     )
-                if match is None:
+                if match is None and not _rels_walled:
                     _core_read = "relations-detail"
                     match = await self.get_relation_detail(vin)
+                elif match is None:
+                    # #1827 — the singular fallback is the SAME endpoint family as
+                    # the list that just walled: ``v2/users/me/relations/{vin}``
+                    # against ``v2/users/me/relations``, same resource host
+                    # (_authproxy.py:513-527). An auth wall on the list is a wall
+                    # on that realm, so this would fire for a guaranteed second
+                    # 401 and then re-raise, unwinding past the cohort-gated
+                    # position / SoH / measurements probes — the very unwind the
+                    # softening exists to stop. Skipping it belongs to the fix.
+                    #
+                    # The nickname and plate stay unset, which is where they were
+                    # before the softening as well: the whole poll used to end at
+                    # the wall. Only the auth wall sets the flag, so a non-auth
+                    # preflight failure keeps using the fallback exactly as it has
+                    # since #1659 — that one leaves the session intact, so the
+                    # singular read can genuinely answer.
+                    _LOGGER.debug(
+                        "vw.de relation enrich skipped for %s: relations walled, "
+                        "the singular fallback reads the same endpoint",
+                        vin[-6:],
+                    )
                 if match is not None:
                     if match.nickname:
                         d.vehicle_nickname = match.nickname
@@ -2751,10 +3023,20 @@ class WebsiteAuthProxyConnector:
             # after a charging wall) already produced data: the session is alive,
             # so re-raising would throw that data away and force a needless
             # refresh+retry.
-            _tail_ok = bool(
-                got_data or d.image_urls or d.model or d.model_year
-                or d.exterior_color or d.engine_power
-            )
+            # #1827 — this used to read ``d.model or d.exterior_color or …``,
+            # i.e. "is there a value", which a cache hit satisfies. Once a VIN sat
+            # in ``_master_cache`` the tail "delivered" on every walled poll
+            # forever, ``_tail_ok`` was permanently True, and the re-raise below —
+            # the only thing that triggers _read_authproxy's refresh+retry
+            # (api/base.py:608-613) and sole mode's reactive refresh
+            # (api/vw_eu.py:844-846) — became unreachable for the life of the
+            # connector instance. A genuinely dead session then had no reactive
+            # recovery at all; only the proactive 10-minute ``maybe_roll`` was
+            # left. Ask whether a read REACHED the backend this poll instead.
+            # The static fields do not flicker when this re-raises: they are held
+            # indefinitely one layer up by STATIC_MASTER_FIELDS
+            # (vehicle_cache.py:97-100), which exists for exactly this case.
+            _tail_ok = bool(got_data) or self._tail_read_was_fresh(vin, _poll_t0)
             if not _tail_ok:
                 raise _core_exc
             _LOGGER.debug(

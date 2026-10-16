@@ -3917,7 +3917,19 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 raise_issue_supplementary_reauth,
             )
             if not armed and getattr(client, "_supplementary_needs_reauth", False):
-                raise_issue_supplementary_reauth(self.hass, self.entry.entry_id)
+                # #1843 — name the car in the notice. Two entries on two
+                # accounts produce two identical notices otherwise, and the
+                # reporter could not tell which password belonged to which.
+                # mask_vin keeps the last six characters, which is what this
+                # project already uses to tell vehicles apart, and what he
+                # asked for. Several vehicles on one entry are joined; an entry
+                # with none yet falls back to its own title, so the placeholder
+                # is never empty (Home Assistant raises on a missing one).
+                _vins = [v for v in getattr(self, "vehicles", {}) if v != "_meta"]
+                _car = ", ".join(mask_vin(v) for v in sorted(_vins)[:3])
+                raise_issue_supplementary_reauth(
+                    self.hass, self.entry.entry_id, _car or self.entry.title
+                )
             else:
                 clear_supplementary_reauth_issue(self.hass, self.entry.entry_id)
         else:
@@ -4160,6 +4172,11 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             merged = await gather_and_merge(
                 self._primary_channel_name(), primary, suppliers,
                 preferred=self._read_priority_channel(vin),
+                # #1827 — hand the client's probe sink along so a supplementary
+                # channel dropping out shows up in the diagnostics instead of
+                # only in a DEBUG line. Same sink the per-read outcomes use, so
+                # the download gains ``channel:<name>`` entries beside them.
+                outcomes=getattr(self._cariad_client, "probe_outcomes", None),
             )
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug(
@@ -5428,8 +5445,20 @@ class VagConnectCoordinator(DataUpdateCoordinator):
 
         # Vehicle model name (e.g. "ID.4") makes the GitHub issue recognizable
         # at a glance and doubles as the maintainer's private per-model stat.
-        # NOT PII (generic), VIN stays masked. Entries are typically one car;
-        # pick the first vehicle that carries a model name.
+        # This goes into a PUBLIC issue title, so it must stay a *generic*
+        # designation. The owner-set nickname is person-typed and is kept out of
+        # the model slot upstream for VW and Audi (api/vw_eu.py _pick_model).
+        #
+        # That is NOT yet true for every brand, and this loop is brand-agnostic:
+        # api/skoda_official.py assigns ``d.model = v.get("name")``, and that
+        # endpoint's own documented behaviour (docs/research/skoda-official-api.md)
+        # is to return the user-defined vehicle name there and fall back to the
+        # model only when the owner never named the car. The field is ambiguous
+        # at source, so splitting it is a behaviour decision about device naming
+        # rather than a filter, and it is deliberately not made here.
+        # _safe_model remains the backstop and drops a VIN-shaped value.
+        # VIN stays masked. Entries are typically one car; pick the
+        # first vehicle that carries a model name.
         model: str | None = None
         for vdata in getattr(self, "vehicles", {}).values():
             if isinstance(vdata, dict):

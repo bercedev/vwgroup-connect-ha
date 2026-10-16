@@ -2,9 +2,8 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests for v1.20.3 — capability-gating bug-fix bundle.
 
-Closes 8+ bugs reported by a user actively testing on Audi A4 B9
-(WAUZZZF43JA027519), Audi Q5 2021 (WAUZZZF29MN024037), and VW
-Golf 7 2015 (WVWZZZAUZFW805377) on 2026-05-07. **All 3 vehicles
+Closes 8+ bugs reported by a user actively testing on an Audi A4 B9,
+an Audi Q5 2021 and a VW Golf 7 2015 on 2026-05-07. **All 3 vehicles
 have active Audi/VW Connect+ subscription** — so 404 on action
 commands is NOT missing-capability; root cause traces to Cariad-BFF
 wrapping upstream-backend issues in fake-404 responses (verified

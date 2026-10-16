@@ -67,11 +67,13 @@ names, brand-specific German terminology like "Standheizung",
 new "VW Group Connect" identity + growing international audience
 (VW North America landed in v2.3.0, more brands coming) make
 English-primary more inclusive. The DACH community's voice stays
-visible via inline German callouts and the dedicated DE-translated
-[`docs/CHANGELOG_TECHNICAL.md`](docs/CHANGELOG_TECHNICAL.md).
+visible via inline German callouts in the entries themselves.
 
 **Style guide**:
-- Section title: `## [vX.Y.Z] — date — "EN Codename / DE Codename"` (EN first)
+- Section title: `## [X.Y.Z] - YYYY-MM-DD — "EN Codename / DE Codename"`
+  (EN first). No `v` before the number, ASCII hyphen before the date — the
+  heading is machine-read, see [Heading format is
+  machine-read](#heading-format-is-machine-read).
 - Body: English-primary. Insert a German sentence/paragraph only when
   the original context was DACH-specific or when terminology has no
   clean English equivalent.
@@ -83,12 +85,12 @@ visible via inline German callouts and the dedicated DE-translated
 
 CHANGELOG entries are **for end-users**, not for archeology. Keep them
 short. Technical detail belongs in commit messages, pull-request
-bodies, inline code comments, and `docs/CHANGELOG_TECHNICAL.md`.
+bodies, and inline code comments.
 
 **Per-release structure** (skip empty sections):
 
 ```markdown
-## [vX.Y.Z] — date — "Short codename"
+## [X.Y.Z] - YYYY-MM-DD — "Short codename"
 
 ### Fixed
 - One-line description per bug, ending with the issue number (#NNN)
@@ -104,6 +106,38 @@ bodies, inline code comments, and `docs/CHANGELOG_TECHNICAL.md`.
 ### Notes
 - Anything noteworthy that doesn't fit above (release-process
   changes, deprecation warnings, etc.)
+```
+
+### Heading format is machine-read
+
+That `## [X.Y.Z]` line is parsed by three readers. Getting it wrong either
+turns CI red or quietly degrades the published release, so the shape is not
+cosmetic:
+
+| Reader | What it looks for | With `## [vX.Y.Z]` instead |
+|---|---|---|
+| `ci.yml`, step *CHANGELOG.md enthält aktuelle Version* | `[` + the bare `manifest.json` version + `]` | **CI goes red** on every push and pull request |
+| `release.yml`, step *Release-Notes generieren* | `## [X.Y.Z]` opening the section | the notes lose this version's section and fall back to a bare *see the CHANGELOG* link |
+| `release.yml`, the version/date list in the same step | `## [X.Y.Z]`, optionally followed by `- YYYY-MM-DD` | this version drops out of the parsed list |
+
+So:
+
+- **No `v` before the number.** `## [4.13.0]`, never `## [v4.13.0]`. The `v`
+  belongs on the git tag, not in the heading.
+- **ASCII hyphen before the ISO date**, because the date is captured by
+  `\s*-\s*`. An em dash there is not matched and the date is lost — not from
+  this release's notes, which never print it, but from the **next** release's
+  *Recent releases* pointer, which then lists this version with no date.
+- **Punctuation after the date is free.** Everything following `]` is `[^\n]*`
+  to the first reader and ignored by the others, so the codename can be set off
+  with an em dash, quotes, or both.
+
+The newest entry in [`CHANGELOG.md`](CHANGELOG.md) is the live example, and
+step 2 below shows the same shape. Checking the heading against the parsers is
+one command:
+
+```bash
+grep -nE '^## \[' CHANGELOG.md | head -3   # newest headings, exactly as parsed
 ```
 
 **Do**:
@@ -217,7 +251,29 @@ So a normal release changes no README at all. If a release *does* add something 
 READMEs should describe, all twelve are updated together under the i18n convention
 above — never English alone.
 
-### 4. Commit + push
+### 4. Resolve the version placeholders in `docs/`
+
+Some pages are written before the version they describe exists and carry a
+forward-looking placeholder instead of a number. Nothing resolves these
+automatically, so they ship verbatim unless this step catches them.
+
+`docs/COMPANION.md` is the current one: its header table has an **Applies to**
+row that reads *the first release after 4.13.0*. Replace it with the concrete
+version in the release commit — a number is the convention everywhere else in
+the repo. That page is the Companion's entry point: `README.md` routes readers
+to it from three places, and `docs/COMPANION_AGENT.md`,
+`docs/COMPANION_APP_MAP.md`, `docs/COMPANION_BATTERY.md` and
+`docs/COMPANION_CLIMATE.md` all name it as the page to start from, so a stale
+row there is the first thing a Companion user reads.
+
+Sweep for the rest before committing. The sweep is scoped to the pages readers
+see, so this document's own quote of that row does not show up as noise:
+
+```bash
+git grep -nE 'the (first|next) release after|\bTBD\b|X\.Y\.Z' -- docs/ README.md
+```
+
+### 5. Commit + push
 
 ```bash
 git add custom_components/vag_connect/manifest.json CHANGELOG.md README*.md
@@ -225,7 +281,7 @@ git commit -m "chore: release 1.9.0"
 git push origin main
 ```
 
-### 5. Tag
+### 6. Tag
 
 ```bash
 git tag -a v1.9.0 -m "VW Group Connect v1.9.0"
@@ -239,7 +295,7 @@ The `release.yml` workflow then automatically:
 - creates the GitHub Release attached to that tag
 - HACS picks it up within ~6 hours
 
-### 6. Notify users
+### 7. Notify users
 
 If the release fixes user-reported bugs (issues with comments from
 non-maintainer accounts), add a short comment on each affected issue
@@ -260,15 +316,38 @@ python -m mypy custom_components/vag_connect/ \
   --warn-return-any                                       # 0 errors
 python -m pytest tests/ \
   --cov=custom_components/vag_connect \
-  --cov-fail-under=75                                     # ≥75 % coverage
+  --cov-fail-under=75                                     # gate value: see below
+
+# The versions and the coverage gate CI pins. Read them, don't memorise them.
+grep -nE 'python-version|ruff==|--cov-fail-under=' .github/workflows/ci.yml
 ```
 
-These match the CI gates exactly — and that sentence has to be re-checked against
-`.github/workflows/ci.yml` whenever either side changes, because it was false for a
-while in both directions at once: the checklist still said `ruff check
-custom_components/` after CI had widened to `custom_components/ tests/`, and still
-said 65 % after the coverage gate moved to 75 %. A checklist that passes locally and
-fails in CI is worse than no checklist, and it has already cost one release cycle.
+**These are the gates worth running locally, not all of CI.**
+`.github/workflows/ci.yml` has four jobs; the commands above cover four checks
+from two of them. CI also runs, and this page deliberately does not duplicate:
+
+| Also enforced by CI | Where |
+|---|---|
+| `manifest.json` carries every required field and a valid `iot_class` | `ci.yml`, *manifest.json validieren* |
+| every `*.json` under `custom_components/` parses | `ci.yml`, *Alle JSON-Dateien validieren* |
+| `CHANGELOG.md` contains the `manifest.json` version as `[X.Y.Z]` | `ci.yml`, *CHANGELOG.md enthält aktuelle Version* |
+| Home Assistant **hassfest** | `ci.yml`, `hassfest` job |
+| **HACS Validation** | `ci.yml`, `hacs` job |
+
+Two things a green local run does not prove, both pinned in `ci.yml` and both
+left out of this page on purpose so it cannot drift against them:
+
+- **ruff version.** CI installs one exact release (`pip install ruff==…`). A
+  different local ruff can disagree with it in either direction.
+- **Python version.** CI sets one interpreter via `actions/setup-python`. A
+  different local interpreter can pass code CI rejects, and the reverse.
+
+The `grep` line above prints both, plus the coverage gate, straight from
+`ci.yml`. `ci.yml` wins over anything written here.
+
+A checklist that passes locally and fails in CI is worse than no checklist, and
+this one has already cost a release cycle: it claimed to match CI exactly while
+naming a narrower `ruff` target and a lower coverage figure than the real gate.
 
 ---
 

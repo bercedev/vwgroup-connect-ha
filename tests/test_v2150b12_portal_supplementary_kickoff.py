@@ -18,7 +18,7 @@ from custom_components.vag_connect.coordinator import VagConnectCoordinator
 
 _SCRAPER = "custom_components.vag_connect.cariad.auth._data_act_scraper.DataActScraper"
 _SESS = "homeassistant.helpers.aiohttp_client.async_get_clientsession"
-_VIN = "WVWZZZAUZFW805377"
+_VIN = "WVWZZZAUZFW000000"
 
 
 def _kickoff_stub(*, strategy: str, supp_portal: bool, auto: bool = True) -> Any:

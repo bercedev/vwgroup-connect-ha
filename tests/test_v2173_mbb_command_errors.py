@@ -33,7 +33,7 @@ from custom_components.vag_connect.cariad.exceptions import (
 )
 from custom_components.vag_connect.cariad.models import TokenSet
 
-_VIN = "WVWZZZAUZFW805377"  # repo-standard MBB test VIN (Golf GTE)
+_VIN = "WVWZZZAUZFW000000"  # repo-standard MBB test VIN (Golf GTE)
 
 _INVALID_SPIN_BODY = (
     '{"error":{"errorCode":"mbbc.rolesandrights.invalidSecurityPin",'

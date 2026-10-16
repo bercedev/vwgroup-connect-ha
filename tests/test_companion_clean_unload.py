@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -283,26 +284,47 @@ class TestTransportShutdown:
 
 class _AddOnBackend:
     """The add-on side: a /shell it accepted runs to completion on the phone
-    whatever happens to the HTTP request that sent it."""
+    whatever happens to the HTTP request that sent it.
 
-    def __init__(self, phone: _Phone, run_s: float, http_s: float) -> None:
+    Driven by events, not by durations. The first version took a run time and an
+    HTTP timeout in real seconds and let them race the unload: the walk's second
+    command had to be attempted AFTER ``close()`` had shut the transport, and on
+    the (0.3, 0.05) pair those two moments were about 30 ms apart. It passed
+    alone and failed under load, which is the worst kind of test, because every
+    "suite green" statement in the project became a coin toss.
+
+    None of it needs a clock. ``close()`` shuts the transport and marks the
+    phone unsettled before it returns (client.py:645-659), and the transport
+    then refuses on a flag (addon_transport.py:195-196), so the ordering under
+    test follows from causality once the test says when each step happens.
+
+    ``answers`` picks the case the old parametrisation expressed in seconds:
+    True for a request answered late (the phone finishes and the reply gets
+    through), False for one that gives up while the add-on carries on anyway.
+    """
+
+    def __init__(self, phone: _Phone, *, answers: bool = True) -> None:
         self._phone = phone
-        self._run_s = run_s
-        self._http_s = http_s
+        self._answers = answers
+        self.accepted = asyncio.Event()         # the add-on has the command
+        self.finish_on_phone = asyncio.Event()  # it finishes running it
+        self.give_up_on_http = asyncio.Event()  # the request stops waiting
         self.jobs: list[asyncio.Task] = []
 
     async def _run(self, cmd: str) -> str:
-        await asyncio.sleep(self._run_s)
+        await self.finish_on_phone.wait()
         self._phone.events.append(("old", "tap" if "tap" in cmd else "shell"))
         return ""
 
     async def post(self, cmd: str, _timeout: float) -> str:
         job = asyncio.ensure_future(self._run(cmd))
         self.jobs.append(job)
-        try:
-            return await asyncio.wait_for(asyncio.shield(job), self._http_s)
-        except TimeoutError as err:
-            raise CompanionTransportError("the add-on became unreachable") from err
+        self.accepted.set()
+        if self._answers:
+            # Answered late: the reply is whatever the finished job returned.
+            return await asyncio.shield(job)
+        await self.give_up_on_http.wait()
+        raise CompanionTransportError("the add-on became unreachable")
 
 
 def _addon_client(phone: _Phone, backend: _AddOnBackend) -> CompanionClient:
@@ -326,15 +348,27 @@ def _new_client(phone: _Phone) -> tuple[CompanionClient, Any]:
 
 class TestCommandTheAddOnFinishesAlone:
     @pytest.mark.asyncio
-    @pytest.mark.parametrize(("run_s", "http_s"), [(0.1, 5.0), (0.3, 0.05)])
-    async def test_new_first_dump_waits_for_the_old_tap(
-        self, run_s: float, http_s: float
-    ) -> None:
+    @pytest.mark.parametrize(
+        "answers", [True, False], ids=["answered-late", "never-answered"],
+    )
+    async def test_new_first_dump_waits_for_the_old_tap(self, answers: bool) -> None:
         """The walk outlives the unload wait with a tap still running in the
-        add-on: answered late (first case), or never, its HTTP request timing
-        out while the add-on carries on (second case)."""
+        add-on: answered late, or never, its HTTP request giving up while the
+        add-on carries on.
+
+        Every step is sequenced by an event rather than by a duration, and
+        ``_CLOSE_WAIT_S`` is 0.0, which is exactly what "the wait ran out"
+        means. ``_AddOnBackend`` records why the earlier timings were a race.
+
+        Which assertion carries what, since the two cases differ in the
+        production code and not only in the fixture: the refusal of the second
+        command is the same in both. The ordering is only genuinely at risk in
+        the never-answered case — when the request IS answered late, the reply
+        is the finished job, so the tap cannot land after the walk by
+        construction. The parked assertion covers the gate in both.
+        """
         phone = _Phone()
-        backend = _AddOnBackend(phone, run_s, http_s)
+        backend = _AddOnBackend(phone, answers=answers)
         old = _addon_client(phone, backend)
         sent_more: list[BaseException] = []
 
@@ -351,28 +385,137 @@ class TestCommandTheAddOnFinishesAlone:
 
         old._channel._read_serialized = _walk
         walk = asyncio.create_task(old._channel.read())
-        await asyncio.sleep(0.01)
-        with patch("custom_components.vag_connect.companion.client._CLOSE_WAIT_S", 0.01), \
-             patch("custom_components.vag_connect.companion.client._SETTLE_S", 0.5):
-            await old.close()
-        new, _ = _new_client(phone)
-        await new._channel.read()
-        await walk
-        await asyncio.gather(*backend.jobs)
+        await backend.accepted.wait()   # the add-on is holding the first command
 
+        # _INFLIGHT_WAIT_S is 0.0 for the same reason _CLOSE_WAIT_S is: the
+        # scenario is a wait that ran out, not a wait of some length. The
+        # add-on is still holding the first command here, and shutdown()
+        # waits for it (addon_transport.py:174) — at the shipped 40 s that
+        # would be 40 s of real time per case for an outcome that is already
+        # decided. That the wait HAPPENS, and that it reports an unanswered
+        # command, is covered by TestTransportShutdown above.
+        with patch("custom_components.vag_connect.companion.client._CLOSE_WAIT_S", 0.0), \
+             patch("custom_components.vag_connect.companion.addon_transport._INFLIGHT_WAIT_S", 0.0), \
+             patch("custom_components.vag_connect.companion.client._SETTLE_S", 30.0):
+            await old.close()
+        # close() has returned, so the transport is shut and the phone is marked
+        # unsettled — both before the first command has resolved. That is the
+        # ordering the old durations were trying to arrange by hand.
+
+        if answers:
+            backend.finish_on_phone.set()   # the phone finishes; the reply lands
+        else:
+            backend.give_up_on_http.set()   # the request gives up on it
+        await walk
         assert sent_more, "the old walk sent a second command after the unload"
-        taps = [i for i, e in enumerate(phone.events) if e == ("old", "tap")]
-        assert len(taps) == 1
-        assert phone.events.index(("new", "dump")) > taps[0]
+
+        # The next client's first walk has to be held by the settle the unload
+        # left behind. Parking it ON the gate rather than next to it is the
+        # point: awaiting the add-on's job first would make the ordering below
+        # true by construction, which is an arrangement and not a test.
+        from custom_components.vag_connect.companion import channel
+
+        parked = asyncio.Event()
+        resume = asyncio.Event()
+
+        async def _park(_delay: float) -> None:
+            parked.set()
+            await resume.wait()
+
+        new, _ = _new_client(phone)
+        with patch.object(channel.asyncio, "sleep", _park):
+            read = asyncio.create_task(new._channel.read())
+            # Bounded only so a missing gate fails instead of hanging: on the
+            # passing path this is set on the first scheduling, so the size
+            # cannot matter. It is the one clock left here and it can only fire
+            # in the failing direction.
+            await asyncio.wait_for(parked.wait(), 10)
+            assert ("new", "dump") not in phone.events, (
+                "the next walk dumped without waiting out the settle"
+            )
+            backend.finish_on_phone.set()   # now the add-on finishes its tap
+            await asyncio.gather(*backend.jobs)
+            resume.set()
+            await read
+
+        assert phone.events.count(("old", "tap")) == 1, "the tap must run once"
+        assert phone.events.index(("new", "dump")) > phone.events.index(("old", "tap"))
 
     @pytest.mark.asyncio
     async def test_a_clean_unload_leaves_no_settle_wait(self) -> None:
         phone = _Phone()
-        old = _addon_client(phone, _AddOnBackend(phone, 0.0, 5.0))
+        old = _addon_client(phone, _AddOnBackend(phone))
         with patch("custom_components.vag_connect.companion.client._SETTLE_S", 30.0):
             await old.close()
         new, _ = _new_client(phone)
         await asyncio.wait_for(new._channel.read(), timeout=1)
+
+
+class TestTheSettleGate:
+    """``_ScreenLock._settle`` is what keeps the next client off a phone the
+    previous unload could not confirm idle (channel.py:246-271).
+
+    It used to be covered only from one side: the test above asserts that a
+    CLEAN unload leaves no wait. Nothing asserted that an unconfirmed one does
+    leave one, which is the half the reload ordering actually depends on — so
+    the whole gate could have been deleted with the suite staying green.
+
+    Both tests here are clock-free on purpose. The gate sleeps the remaining
+    time and then drops its own mark, so a test that sets a short real deadline
+    and hopes to arrive before it expires is the same race this file just had.
+    Instead: a deadline in the future with ``asyncio.sleep`` captured proves the
+    wait was asked for, and a deadline already past proves the mark is dropped
+    without waiting.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_unconfirmed_unload_makes_the_next_walk_wait(self) -> None:
+        from custom_components.vag_connect.companion import channel
+
+        phone = _Phone()
+        new, _ = _new_client(phone)
+        keys = new._phone_keys
+        assert keys, "without a phone key the gate cannot apply to anything"
+        channel._UNSETTLED.update({k: time.monotonic() + 30.0 for k in keys})
+
+        asked: list[float] = []
+
+        async def _record(delay: float) -> None:
+            asked.append(delay)
+
+        with patch.object(channel.asyncio, "sleep", _record):
+            await new._channel.read()
+
+        # Module-wide capture: patching this module's ``asyncio`` patches the
+        # asyncio module, so the transport's own 0.01 s yields are in here too.
+        # The question is whether a settle-SIZED wait was asked for.
+        assert any(d > 25.0 for d in asked), (
+            f"the first walk did not wait out the settle; waits asked for: {asked}"
+        )
+        assert phone.events == [("new", "dump")]
+
+    @pytest.mark.asyncio
+    async def test_a_settle_that_has_passed_is_dropped_without_waiting(self) -> None:
+        from custom_components.vag_connect.companion import channel
+
+        phone = _Phone()
+        new, _ = _new_client(phone)
+        keys = new._phone_keys
+        channel._UNSETTLED.update({k: time.monotonic() - 1.0 for k in keys})
+
+        asked: list[float] = []
+
+        async def _record(delay: float) -> None:
+            asked.append(delay)
+
+        with patch.object(channel.asyncio, "sleep", _record):
+            await new._channel.read()
+
+        assert not [d for d in asked if d > 1.0], (
+            f"waited on a settle that had already passed; waits asked for: {asked}"
+        )
+        for key in keys:
+            assert key not in channel._UNSETTLED, "the gate must drop its own mark"
 
 
 class TestCancelledClose:

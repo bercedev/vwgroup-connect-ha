@@ -62,6 +62,22 @@ _FIXABLE_REASONS: dict[str, str] = {
     "email_two_factor_required": "reauth",
     "terms_and_conditions":  "reauth",
     "marketing_consent":     "reauth",
+    # #1813 — both notices told the user to go and do something, while the
+    # notice itself offered nothing to click, because neither reason was in
+    # here. Both now open reauth, and both end up in the right place, because
+    # the routing inside reauth consults qr_signin_live: where the code sign-in
+    # is alive it hands off to it, and where it is retired it shows the
+    # credential form with the email field added.
+    #
+    # Reconfigure was the first choice here and was wrong. On these entries the
+    # unique id is f"{brand}_{dag_user_id}", so a reconfigure that takes an email
+    # always computes a different unique id, takes the account_changed branch and
+    # does a CLEAN REBUILD of entry.data — dropping the MBB command channel, the
+    # supplementary portal credentials and the cohort flag — and can abort
+    # already_configured for anyone who already made a second entry. Reauth
+    # updates with {**reauth_entry.data, ...} and leaves the unique id alone.
+    "device_login_expired":  "reauth",
+    "device_login_grant_retired": "reauth",
 }
 
 # v1.19.4 Bundle 1 — Brand-aware deeplinks für T&C-Repair-Issue.
@@ -122,6 +138,13 @@ def raise_issue_auth_required(
         "device_login_expired": (
             ir.IssueSeverity.ERROR,
             "device_login_expired",
+        ),
+        # #1813 follow-up — same entry shape, but on a brand whose app
+        # device-code client was retired, so the QR step above is a dead end
+        # and the way back in is reconfigure with email + password.
+        "device_login_grant_retired": (
+            ir.IssueSeverity.ERROR,
+            "device_login_grant_retired",
         ),
         "terms_and_conditions": (
             ir.IssueSeverity.ERROR,
@@ -186,11 +209,14 @@ def clear_auth_issues(hass: HomeAssistant, entry_id: str) -> None:
                    "terms_and_conditions",
                    "marketing_consent", "too_many_requests",
                    "invalid_credentials", "auth_failed",
-                   "device_login_expired", "portal_interaction_required"]:
+                   "device_login_expired", "device_login_grant_retired",
+                   "portal_interaction_required"]:
         ir.async_delete_issue(hass, DOMAIN, f"{entry_id}_{reason}")
 
 
-def raise_issue_supplementary_reauth(hass: HomeAssistant, entry_id: str) -> None:
+def raise_issue_supplementary_reauth(
+    hass: HomeAssistant, entry_id: str, car: str = ""
+) -> None:
     """v2.15.0b5 (C1) — the supplementary vw.de read channel can't silently
     resume (login=otp_required); prompt the user to re-add it. WARNING severity:
     the primary channel keeps working regardless. Idempotent.
@@ -215,6 +241,16 @@ def raise_issue_supplementary_reauth(hass: HomeAssistant, entry_id: str) -> None
         is_persistent=False,
         severity=ir.IssueSeverity.WARNING,
         translation_key="supplementary_reauth",
+        # #1843 (@kalwados) — two cars on two accounts get two of these
+        # notices, and until now neither said which car it meant. The
+        # docstring above already admitted the gap ("having to guess WHICH
+        # entry it refers to when several are configured"); the Fix button
+        # removed the walk to Settings but not the guess. The VIN tail is
+        # what he asked for and what this project already uses to tell
+        # vehicles apart in logs and diagnostics (mask_vin keeps six
+        # characters, never the whole identifier). Callers pass a non-empty
+        # string; Home Assistant raises if a declared placeholder is absent.
+        translation_placeholders={"car": car or "this entry"},
         learn_more_url="https://github.com/its-me-prash/vag-connect-ha/blob/main/docs/FAQ.md",
         # The factory routes on these; without them the click cannot find its
         # entry, which is the whole point of the button.
