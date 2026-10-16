@@ -357,3 +357,53 @@ def test_a_session_closing_during_the_backoff_sleep_is_caught_too(
     assert session.calls == 1, (
         "re-entered the request on a session it had been told was closed"
     )
+
+def test_the_login_path_does_not_crash_on_a_closed_session() -> None:
+    """#1842 — the second traceback in a Cupra owner's report of one incident.
+
+    get_status -> login -> _login_impl -> aiohttp's __aenter__, with the bare
+    RuntimeError("Session is closed"). login() catches TimeoutError and
+    ClientConnectionError, stores anything else as _login_error and re-raises
+    it unchanged, so the RuntimeError reached the error reporter and a shutdown
+    race was filed as a crash on a released version.
+
+    It had been left unguarded deliberately, because nobody had traced whether
+    something upstream converted it. The report answers that: nothing does.
+    """
+    from custom_components.vag_connect.cariad.auth._eu_data_act import (
+        EUDataActConnector,
+    )
+    from custom_components.vag_connect.cariad.exceptions import (
+        AuthenticationError,
+        CariadError,
+    )
+
+    session = _Session(closed=True)
+    conn = EUDataActConnector(session, brand="cupra")  # type: ignore[arg-type]
+
+    with pytest.raises(CariadError) as excinfo:
+        _run(conn.login("someone@example.invalid", "pw"))
+
+    assert not isinstance(excinfo.value, AuthenticationError), (
+        "an auth error makes the caller replay the password at a dead session"
+    )
+    assert session.calls == 0, "started the login against a closed session"
+    msg = str(excinfo.value).lower()
+    assert "unload" in msg or "reload" in msg
+
+
+def test_bearer_mode_still_short_circuits_before_the_new_guard() -> None:
+    """The device-grant path mints its own token and makes no request, so it
+    must keep returning without being told the session is gone. Guards on both
+    sides of this would have made a Bearer-mode login fail for no reason."""
+    from custom_components.vag_connect.cariad.auth._eu_data_act import (
+        EUDataActConnector,
+    )
+
+    session = _Session(closed=True)
+    conn = EUDataActConnector(session, brand="cupra")  # type: ignore[arg-type]
+    conn._bearer = "a-token"  # type: ignore[attr-defined]
+
+    _run(conn._login_impl("someone@example.invalid", "pw"))
+    assert conn.logged_in is True
+    assert session.calls == 0

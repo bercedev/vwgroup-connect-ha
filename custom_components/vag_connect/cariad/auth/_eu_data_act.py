@@ -6157,6 +6157,41 @@ class EUDataActConnector:
         if self._bearer:
             self.logged_in = True
             return
+
+        # #1842 (@ColinSainsbury, a Cupra, 2026-10-16) — the same closed-session
+        # race as #1834, one function over. His report carries TWO tracebacks
+        # from one incident: the first is get_vehicle_data -> _get_json, which
+        # the guard in that function now answers, and the second is
+        # get_status -> login -> _login_impl -> aiohttp's __aenter__ with the
+        # bare RuntimeError("Session is closed").
+        #
+        # That second path was left unguarded on purpose, on the grounds that a
+        # login beginning after the entry unloaded is not the poll loop and that
+        # nobody had traced whether something upstream converted the error. The
+        # trace settles it: login() catches TimeoutError and
+        # ClientConnectionError, stores anything else as _login_error and
+        # re-raises it unchanged, so a RuntimeError travels straight to the
+        # error reporter and a shutdown race is filed as a crash. Reported, not
+        # hypothetical, so the reason for leaving it open is gone.
+        #
+        # Checked here rather than in login()'s handler because this is the
+        # first thing the function does that could touch the network, and
+        # because the bearer path above must keep returning without a check it
+        # does not need. CariadError and not AuthenticationError: the caller
+        # replays the password on an auth error, which cannot help a session
+        # that no longer exists.
+        if getattr(self._session, "closed", False) is True:
+            _LOGGER.debug(
+                "EU Data Act: the entry's session is closed, so the portal "
+                "login was not started (the entry is unloading or reloading)"
+            )
+            raise CariadError(
+                "EU Data Act: the connection was closed before the portal "
+                "login could start. That happens when the integration entry "
+                "is unloaded or reloaded; nothing is wrong with the account, "
+                "and the next setup opens a new one."
+            )
+
         headers = {"User-Agent": _USER_AGENT}
 
         # 1. Start OIDC directly at the IDP (portal's own servlet 500s for
