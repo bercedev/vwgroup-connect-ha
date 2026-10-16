@@ -2559,7 +2559,7 @@
       "description": "Tu cuenta de Volkswagen inició sesión y se leyó tu garaje, pero las solicitudes de datos por vehículo (estado, carga, climatización) se rechazan con un error HTTP 403 Forbidden, y la respuesta incluye un marcador de **atestación del dispositivo**.\n\nEsto es un **bloqueo del lado del servidor por parte de VW**, no un problema de suscripción ni algo que un nuevo inicio de sesión pueda solucionar — así que renovar Car-Net no ayudará. VW ahora exige un token de atestación del dispositivo firmado por Google (Firebase App Check / Play Integrity) que la app oficial genera a partir de una compilación reforzada, algo que un cliente de código abierto no puede reproducir.\n\nLa integración sigue mostrando los últimos datos que guardó en caché. Este aviso desaparece solo si VW vuelve a abrir el plano de datos."
     },
     "supplementary_reauth": {
-      "title": "El canal de lectura Volkswagen.de necesita iniciar sesión de nuevo",
+      "title": "El canal de lectura Volkswagen.de necesita iniciar sesión de nuevo — {car}",
       "fix_flow": {
         "step": {
           "confirm": {

@@ -3917,7 +3917,19 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 raise_issue_supplementary_reauth,
             )
             if not armed and getattr(client, "_supplementary_needs_reauth", False):
-                raise_issue_supplementary_reauth(self.hass, self.entry.entry_id)
+                # #1843 — name the car in the notice. Two entries on two
+                # accounts produce two identical notices otherwise, and the
+                # reporter could not tell which password belonged to which.
+                # mask_vin keeps the last six characters, which is what this
+                # project already uses to tell vehicles apart, and what he
+                # asked for. Several vehicles on one entry are joined; an entry
+                # with none yet falls back to its own title, so the placeholder
+                # is never empty (Home Assistant raises on a missing one).
+                _vins = [v for v in getattr(self, "vehicles", {}) if v != "_meta"]
+                _car = ", ".join(mask_vin(v) for v in sorted(_vins)[:3])
+                raise_issue_supplementary_reauth(
+                    self.hass, self.entry.entry_id, _car or self.entry.title
+                )
             else:
                 clear_supplementary_reauth_issue(self.hass, self.entry.entry_id)
         else:

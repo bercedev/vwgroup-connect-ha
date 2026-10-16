@@ -162,6 +162,7 @@ VW app 4.6.4 is supported (gszigethy/vwgroup-connect-ha#28, gszigethy/vwgroup-co
 
 ### Geändert / Changed
 
+- **The "volkswagen.de read channel needs re-login" notice now says which car it means.** If you run more than one vehicle, two accounts produced two identical notices and nothing distinguished them, so you could not tell which password belonged to which. The notice carries the last six characters of the car's VIN now — the same short form the logs and the diagnostics download already use, never the full identifier. Thanks @kalwados (#1843).
 - **Some cars that the legacy MBB host turns away now get their service list from the EU-DP
   host.** When the legacy host answers `401 gw.error.authentication`, the operationList is now
   requested once from the EU-DP host before the car is marked "no legacy". That list is used

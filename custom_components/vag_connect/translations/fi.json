@@ -2559,7 +2559,7 @@
       "description": "Volkswagen-tilisi kirjautui sisään ja autotallisi luettiin, mutta ajoneuvokohtaiset datapyynnöt (tila, lataus, ilmastointi) hylätään HTTP 403 Forbidden -virheellä, ja vastaus sisältää **laitetodennus**merkinnän.\n\nTämä on **VW:n palvelinpuolen lukitus**, ei tilausongelma eikä mitään mitä uudelleenkirjautuminen voisi korjata — joten Car-Netin uusiminen ei auta. VW vaatii nyt Googlen allekirjoittaman laitetodennustunnisteen (Firebase App Check / Play Integrity), jonka virallinen sovellus luo koventeetusta koontiversiosta ja jota avoimen lähdekoodin asiakas ei voi jäljitellä.\n\nIntegraatio näyttää edelleen viimeksi välimuistiin tallentamansa tiedot. Tämä varoitus poistuu itsestään, jos VW avaa datatason uudelleen."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-lukukanava vaatii uuden kirjautumisen",
+      "title": "Volkswagen.de-lukukanava vaatii uuden kirjautumisen — {car}",
       "fix_flow": {
         "step": {
           "confirm": {

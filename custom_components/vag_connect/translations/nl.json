@@ -2559,7 +2559,7 @@
       "description": "Je Volkswagen-account is ingelogd en je garage is gelezen, maar de gegevensverzoeken per voertuig (status, laden, klimaat) worden geweigerd met HTTP 403 Forbidden, en het antwoord bevat een **apparaatattestatie**-markering.\n\nDit is een **serverzijdige vergrendeling door VW**, geen abonnementsprobleem en niets wat opnieuw inloggen kan oplossen — Car-Net verlengen helpt dus niet. VW vereist nu een door Google ondertekend apparaatattestatie-token (Firebase App Check / Play Integrity) dat de officiële app vanuit een geharde build aanmaakt en dat een opensource-client niet kan nabootsen.\n\nDe integratie blijft de laatst opgeslagen gegevens tonen. Deze waarschuwing verdwijnt vanzelf als VW het gegevensvlak weer openstelt."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-leeskanaal vereist opnieuw inloggen",
+      "title": "Volkswagen.de-leeskanaal vereist opnieuw inloggen — {car}",
       "fix_flow": {
         "step": {
           "confirm": {

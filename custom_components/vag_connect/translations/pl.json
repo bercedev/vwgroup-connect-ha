@@ -2559,7 +2559,7 @@
       "description": "Twoje konto Volkswagen zalogowało się i odczytano Twój garaż, ale żądania danych dla pojazdu (status, ładowanie, klimatyzacja) są odrzucane z błędem HTTP 403 Forbidden, a odpowiedź zawiera znacznik **atestacji urządzenia**.\n\nTo **blokada po stronie serwera VW**, a nie problem z subskrypcją ani coś, co da się naprawić ponownym logowaniem — odnowienie Car-Net więc nie pomoże. VW wymaga teraz podpisanego przez Google tokenu atestacji urządzenia (Firebase App Check / Play Integrity), który oficjalna aplikacja generuje z utwardzonej kompilacji, a klient open source nie jest w stanie go odtworzyć.\n\nIntegracja nadal pokazuje ostatnie dane zapisane w pamięci podręcznej. To ostrzeżenie zniknie samo, jeśli VW ponownie otworzy warstwę danych."
     },
     "supplementary_reauth": {
-      "title": "Kanał odczytu Volkswagen.de wymaga ponownego logowania",
+      "title": "Kanał odczytu Volkswagen.de wymaga ponownego logowania — {car}",
       "fix_flow": {
         "step": {
           "confirm": {

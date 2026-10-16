@@ -214,7 +214,9 @@ def clear_auth_issues(hass: HomeAssistant, entry_id: str) -> None:
         ir.async_delete_issue(hass, DOMAIN, f"{entry_id}_{reason}")
 
 
-def raise_issue_supplementary_reauth(hass: HomeAssistant, entry_id: str) -> None:
+def raise_issue_supplementary_reauth(
+    hass: HomeAssistant, entry_id: str, car: str = ""
+) -> None:
     """v2.15.0b5 (C1) — the supplementary vw.de read channel can't silently
     resume (login=otp_required); prompt the user to re-add it. WARNING severity:
     the primary channel keeps working regardless. Idempotent.
@@ -239,6 +241,16 @@ def raise_issue_supplementary_reauth(hass: HomeAssistant, entry_id: str) -> None
         is_persistent=False,
         severity=ir.IssueSeverity.WARNING,
         translation_key="supplementary_reauth",
+        # #1843 (@kalwados) — two cars on two accounts get two of these
+        # notices, and until now neither said which car it meant. The
+        # docstring above already admitted the gap ("having to guess WHICH
+        # entry it refers to when several are configured"); the Fix button
+        # removed the walk to Settings but not the guess. The VIN tail is
+        # what he asked for and what this project already uses to tell
+        # vehicles apart in logs and diagnostics (mask_vin keeps six
+        # characters, never the whole identifier). Callers pass a non-empty
+        # string; Home Assistant raises if a declared placeholder is absent.
+        translation_placeholders={"car": car or "this entry"},
         learn_more_url="https://github.com/its-me-prash/vag-connect-ha/blob/main/docs/FAQ.md",
         # The factory routes on these; without them the click cannot find its
         # entry, which is the whole point of the button.

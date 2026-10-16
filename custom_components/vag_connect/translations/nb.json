@@ -2559,7 +2559,7 @@
       "description": "Volkswagen-kontoen din logget inn og garasjen din ble lest, men de kjøretøyspesifikke dataforespørslene (status, lading, klima) avvises med HTTP 403 Forbidden, og responsen bærer en markør for **enhetsattestasjon**.\n\nDette er en **serversidesperre fra VW**, ikke et abonnementsproblem og ikke noe en ny innlogging kan fikse — så å fornye Car-Net vil ikke hjelpe. VW krever nå et Google-signert token for enhetsattestasjon (Firebase App Check / Play Integrity) som den offisielle appen oppretter fra en herdet bygg, og som en åpen kildekode-klient ikke kan gjenskape.\n\nIntegrasjonen fortsetter å vise de sist bufrede dataene. Denne advarselen forsvinner av seg selv hvis VW åpner dataplanet igjen."
     },
     "supplementary_reauth": {
-      "title": "Volkswagen.de-lesekanalen må logge inn igjen",
+      "title": "Volkswagen.de-lesekanalen må logge inn igjen — {car}",
       "fix_flow": {
         "step": {
           "confirm": {
