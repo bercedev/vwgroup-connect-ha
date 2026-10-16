@@ -3,8 +3,9 @@
     "step": {
       "reauth_confirm": {
         "title": "Re-authenticate — {brand}",
-        "description": "The session for **{username}** has expired.\n\nPlease re-enter your password.",
+        "description": "The session for **{username}** has expired.\n\nPlease re-enter the details below. If an email address is asked for, this entry stores an internal account identifier rather than your address, so it is not filled in for you.",
         "data": {
+          "username": "Email Address",
           "password": "Password",
           "spin": "S-PIN"
         }

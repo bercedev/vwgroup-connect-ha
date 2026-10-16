@@ -6495,29 +6495,45 @@ class EUDataActConnector:
         # the user "server-side issue at VW … do NOT reconfigure", and this is
         # our own session going away locally. A false explanation is worse than
         # a plain one.
-        # ``is True`` and not merely truthy: most tests here hand the connector
-        # a MagicMock, whose auto-created ``.closed`` attribute is a Mock and
-        # therefore truthy, which made this guard swallow nine live tests the
-        # first time it was written. aiohttp's ClientSession.closed is a real
-        # bool property, so the strict test is exact for the thing that matters
-        # and inert for every stand-in.
-        if getattr(self._session, "closed", False) is True:
-            _LOGGER.debug(
-                "EU Data Act: the entry's session is closed, so %s was not "
-                "attempted (the entry is unloading or reloading; the next "
-                "setup gets a fresh session)",
-                _safe_api_url(url),
-            )
-            if soft:
-                return None
-            raise CariadError(
-                "EU Data Act: the connection was closed while this read was "
-                "starting. That happens when the integration entry is "
-                "unloaded or reloaded; nothing is wrong with the account, and "
-                "the next setup opens a new one."
-            )
-
         for attempt in range(len(_PORTAL_RETRY_DELAYS) + 1):
+            # Checked on EVERY attempt, not once before the loop. The first
+            # version of this guard sat above the loop, on the reasoning that
+            # retrying a closed session cannot help - true, and it left the
+            # larger hole open. A retriable 5xx sleeps 3 s and then 6 s
+            # (_PORTAL_RETRY_DELAYS) and comes back here, so an entry unloaded
+            # during that sleep re-entered the request with no check at all and
+            # the bare RuntimeError escaped exactly as in #1834. Measured: two
+            # requests, one 3 s sleep, RuntimeError out of both the soft and the
+            # hard path. The window is seconds wide rather than one await long,
+            # and portal 5xx storms are documented in this very file, so it is
+            # the likelier of the two races, not the edge case.
+            #
+            # One check at the top of the body covers entry and every re-entry,
+            # which is why the pre-loop copy is gone rather than kept alongside.
+            #
+            # ``is True`` and not merely truthy: most tests here hand the
+            # connector a MagicMock, whose auto-created ``.closed`` attribute is
+            # a Mock and therefore truthy, which made this guard swallow nine
+            # live tests the first time it was written. aiohttp's
+            # ClientSession.closed is a real bool property, so the strict test is
+            # exact for the thing that matters and inert for every stand-in.
+            if getattr(self._session, "closed", False) is True:
+                _LOGGER.debug(
+                    "EU Data Act: the entry's session is closed, so %s was not "
+                    "attempted on try %d (the entry is unloading or reloading; "
+                    "the next setup gets a fresh session)",
+                    _safe_api_url(url),
+                    attempt + 1,
+                )
+                if soft:
+                    return None
+                raise CariadError(
+                    "EU Data Act: the connection was closed while this read "
+                    "was in flight. That happens when the integration entry is "
+                    "unloaded or reloaded; nothing is wrong with the account, "
+                    "and the next setup opens a new one."
+                )
+
             try:
                 async with self._session.get(
                     url, headers=eff_headers, timeout=ClientTimeout(total=_TIMEOUT_S),

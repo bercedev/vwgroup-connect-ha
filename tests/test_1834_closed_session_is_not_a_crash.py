@@ -233,11 +233,11 @@ def test_the_whole_poll_makes_no_request_and_never_reaches_the_download() -> Non
     would travel exactly as far as #1834's did.
 
     A guard there would nonetheless be dead code. ``get_vehicle_data`` is the
-    only caller, and it reaches the download only after two soft ``_get_json``
-    calls — the metadata and the dataset listing — the second of which returns
-    early when it comes back empty. With the session closed, the single guard
-    turns both into None and the function returns its empty VehicleData before
-    the loop exists.
+    only caller, and with the session closed it never gets near the loop:
+    measured, it makes exactly ONE soft ``_get_json`` call, for the metadata.
+    That returns None, the identifier stays empty, and the function returns its
+    empty VehicleData. The dataset listing — the call an earlier version of this
+    docstring named as the one that bails — is never reached at all.
 
     This is pinned as a test rather than written as a comment because it is a
     claim about reachability, and reachability is what a later refactor
@@ -269,4 +269,91 @@ def test_the_whole_poll_makes_no_request_and_never_reaches_the_download() -> Non
     assert session.calls == 0, "a request was attempted"
     assert data is not None and data.vin == "WVWZZZ000M0000001", (
         "the poll should still hand back its empty VehicleData, not raise"
+    )
+
+class _FiveHundredThenClosed:
+    """Answers one retriable 5xx, then reports itself closed, as an unload does."""
+
+    def __init__(self) -> None:
+        self.closed = False
+        self.calls = 0
+        self.cookie_jar = type(
+            "_J", (), {"filter_cookies": lambda *_a: {}, "update_cookies": lambda *_a: None}
+        )()
+
+    def get(self, *_a: object, **_k: object) -> Any:
+        self.calls += 1
+        if self.closed:
+            return _ClosedCtx()
+        return _Resp(503)
+
+    post = get
+
+
+class _Resp:
+    def __init__(self, status: int) -> None:
+        self.status = status
+        self.headers: dict[str, str] = {}
+        self.cookies: dict[str, str] = {}
+
+    async def json(self, content_type: str | None = None) -> Any:
+        return {}
+
+    async def text(self) -> str:
+        return ""
+
+    async def __aenter__(self) -> "_Resp":
+        return self
+
+    async def __aexit__(self, *_a: object) -> None:
+        return None
+
+
+@pytest.mark.parametrize("soft", [True, False], ids=["soft", "hard"])
+def test_a_session_closing_during_the_backoff_sleep_is_caught_too(
+    soft: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The hole the first version of this guard left open, and the wider one.
+
+    The guard used to sit ABOVE the retry loop, reasoning that retrying a
+    closed session cannot help. True, and beside the point: a retriable 5xx
+    sleeps 3 s and then 6 s and comes back to the request. An entry unloaded
+    during that sleep re-entered with no check, and the bare RuntimeError
+    escaped exactly as in #1834 — from the soft path as well as the hard one.
+
+    That window is seconds wide, not one await long, and it opens precisely
+    when the portal is throwing 5xx, which is when the retry ladder runs at
+    all. So it is the likelier of the two races rather than the exotic one.
+
+    Measured against the pre-fix code: two requests, one 3.0 s sleep, and
+    RuntimeError("Session is closed") out of both paths.
+    """
+    from custom_components.vag_connect.cariad.auth._eu_data_act import (
+        EUDataActConnector,
+        _PORTAL_RETRY_DELAYS,
+    )
+    from custom_components.vag_connect.cariad.exceptions import CariadError
+
+    session = _FiveHundredThenClosed()
+    conn = EUDataActConnector(session, brand="volkswagen")  # type: ignore[arg-type]
+
+    slept: list[float] = []
+    real_sleep = asyncio.sleep
+
+    async def _close_while_sleeping(delay: float) -> None:
+        slept.append(delay)
+        session.closed = True
+        await real_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", _close_while_sleeping)
+
+    if soft:
+        assert _run(conn._get_json(_URL, soft=True)) is None
+    else:
+        with pytest.raises(CariadError):
+            _run(conn._get_json(_URL))
+
+    assert slept == [_PORTAL_RETRY_DELAYS[0]], "the first backoff should have run"
+    assert session.calls == 1, (
+        "re-entered the request on a session it had been told was closed"
     )
