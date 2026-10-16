@@ -53,6 +53,7 @@
         "title": "Opětovné přihlášení — {brand}",
         "description": "Platnost relace pro **{username}** vypršela.\n\nZadejte prosím znovu heslo.",
         "data": {
+          "username": "E-mailová adresa",
           "password": "Heslo",
           "spin": "S-PIN"
         }

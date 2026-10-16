@@ -5,6 +5,7 @@
         "title": "Logg inn på nytt — {brand}",
         "description": "Økten for **{username}** har utløpt.\n\nSkriv inn passordet ditt på nytt.",
         "data": {
+          "username": "E-postadresse",
           "password": "Passord",
           "spin": "S-PIN"
         }

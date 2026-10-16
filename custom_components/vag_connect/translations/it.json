@@ -5,6 +5,7 @@
         "title": "Autenticazione nuova — {brand}",
         "description": "La sessione per **{username}** è scaduta.\n\nInserisci di nuovo la password.",
         "data": {
+          "username": "Indirizzo email",
           "password": "Password",
           "spin": "S-PIN"
         }

@@ -53,6 +53,7 @@
         "title": "Opnieuw inloggen — {brand}",
         "description": "De sessie voor **{username}** is verlopen.\n\nVoer uw wachtwoord opnieuw in.",
         "data": {
+          "username": "E-mailadres",
           "password": "Wachtwoord",
           "spin": "S-PIN"
         }

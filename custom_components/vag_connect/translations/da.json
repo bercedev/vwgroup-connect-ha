@@ -5,6 +5,7 @@
         "title": "Log ind igen — {brand}",
         "description": "Sessionen for **{username}** er udløbet.\n\nIndtast venligst din adgangskode igen.",
         "data": {
+          "username": "E-mailadresse",
           "password": "Adgangskode",
           "spin": "S-PIN"
         }

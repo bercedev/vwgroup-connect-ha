@@ -3,8 +3,9 @@
     "step": {
       "reauth_confirm": {
         "title": "Erneut anmelden — {brand}",
-        "description": "Die Anmeldung für **{username}** ist abgelaufen.\n\nBitte Passwort erneut eingeben.",
+        "description": "Die Sitzung für **{username}** ist abgelaufen.\n\nBitte gib die Angaben unten erneut ein. Falls eine E-Mail-Adresse verlangt wird: dieser Eintrag speichert eine interne Konto-Kennung und nicht deine Adresse, deshalb wird sie nicht vorausgefüllt.",
         "data": {
+          "username": "E-Mail-Adresse",
           "password": "Passwort",
           "spin": "S-PIN (optional, für Türverriegelung)"
         }

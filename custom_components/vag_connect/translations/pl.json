@@ -53,6 +53,7 @@
         "title": "Ponowne logowanie — {brand}",
         "description": "Sesja dla **{username}** wygasła.\n\nWprowadź ponownie swoje hasło.",
         "data": {
+          "username": "Adres e-mail",
           "password": "Hasło",
           "spin": "S-PIN"
         }

@@ -53,6 +53,7 @@
         "title": "Reconnexion — {brand}",
         "description": "La session pour **{username}** a expiré.\n\nVeuillez saisir à nouveau votre mot de passe.",
         "data": {
+          "username": "Adresse e-mail",
           "password": "Mot de passe",
           "spin": "S-PIN"
         }

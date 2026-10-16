@@ -53,6 +53,7 @@
         "title": "Volver a iniciar sesión — {brand}",
         "description": "La sesión para **{username}** ha caducado.\n\nVuelve a introducir tu contraseña.",
         "data": {
+          "username": "Correo electrónico",
           "password": "Contraseña",
           "spin": "S-PIN"
         }

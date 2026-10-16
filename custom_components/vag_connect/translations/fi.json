@@ -5,6 +5,7 @@
         "title": "Kirjaudu uudelleen — {brand}",
         "description": "Käyttäjän **{username}** istunto on vanhentunut.\n\nAnna salasanasi uudelleen.",
         "data": {
+          "username": "Sähköpostiosoite",
           "password": "Salasana",
           "spin": "S-PIN"
         }

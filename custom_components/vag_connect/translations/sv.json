@@ -53,6 +53,7 @@
         "title": "Logga in igen — {brand}",
         "description": "Sessionen för **{username}** har löpt ut.\n\nAnge lösenordet igen.",
         "data": {
+          "username": "E-postadress",
           "password": "Lösenord",
           "spin": "S-PIN"
         }
