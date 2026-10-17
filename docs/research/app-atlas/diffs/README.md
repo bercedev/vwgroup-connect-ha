@@ -47,9 +47,11 @@ Run the workflow manually when:
 
 ## Limitations (current implementation)
 
-- APKCombo only serves the latest version per app. Per-version
-  fetching requires Phase A.3.1 enhancement (navigate to
-  per-version pages instead of `/download/apk`).
+- Google Play serves only the current build per app, and it is the
+  only source this pipeline uses. There is no version-pinned download
+  on that channel, so a true cross-version diff needs a Phase A.3.1
+  enhancement — a per-version source, or a local archive of builds
+  already fetched.
 - Until A.3.1, the workflow effectively compares "latest" to "latest"
   if you run it for the same version twice. Useful for checking
   baseline state but doesn't yet enable historical "look back".

@@ -59,6 +59,22 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Check the APK source is available here
+        # The APK comes from Google Play via apkeep, which is not installed in
+        # this job and deliberately so: it signs in with a disposable account,
+        # and doing that from a shared runner IP is how those accounts get
+        # locked. Since 2026-10-17 there is no mirror fallback behind it, so
+        # without apkeep this job cannot fetch anything — fail here with the
+        # reason rather than after a 15-minute jadx install, and run the diff
+        # locally instead:
+        #   python scripts/app_atlas/run_deep_diff.py --brand <brand> \
+        #     --old-version <old> --new-version <new>
+        run: |
+          if ! command -v apkeep >/dev/null 2>&1; then
+            echo "::error title=App Atlas deep diff::apkeep is not available on this runner, and Google Play is the only APK source. Run this diff locally — see the comment in this workflow for the command."
+            exit 1
+          fi
+
       - name: Set up Java (jadx requires it)
         uses: actions/setup-java@v6
         with:
