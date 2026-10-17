@@ -347,7 +347,11 @@ def _drop_anchored_sleep_s(
         return float(interval_s)
     if _drop_overdue(interval_s, newest_capture_at, now):
         if overdue_streak >= _DROP_RETRY_MAX_STREAK:
-            return float(interval_s)
+            # Through the same clamp as every other path: an early return of a
+            # bare ``interval_s`` would hand back a sleep BELOW ``floor_s``
+            # whenever the configured interval is shorter than the floor, which
+            # is the one promise this function's docstring makes.
+            return max(float(floor_s), float(interval_s))
         remaining = float(_DROP_RETRY_S)  # drop overdue → poll again soon
     else:
         target = newest_capture_at + timedelta(seconds=interval_s + _DROP_BUFFER_S)

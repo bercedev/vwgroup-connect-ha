@@ -90,6 +90,23 @@ def test_the_result_stays_inside_the_bounds_either_way() -> None:
             assert _FLOOR <= s <= _HIS_INTERVAL, (age, streak)
 
 
+def test_the_spent_budget_path_is_clamped_like_every_other() -> None:
+    """The bound above is the one promise this function makes, and the
+    spent-budget path nearly escaped it: returning a bare `interval_s` hands
+    back a sleep BELOW the floor whenever the configured interval is shorter
+    than the floor. The poll loop never calls it that way — it takes
+    `max(scan_interval * 60, floor)` first — but the function is documented as
+    clamped, and a caller that trusts the docstring would get an unclamped
+    answer only on the one path added here."""
+    old = datetime(2026, 10, 17, 11, 0, 0, tzinfo=timezone.utc)   # an hour old
+    short = 120                                                   # below the floor
+    spent = _drop_anchored_sleep_s(short, old, _NOW, _FLOOR, _DROP_RETRY_MAX_STREAK)
+    unspent = _drop_anchored_sleep_s(short, old, _NOW, _FLOOR, 0)
+    assert spent == float(_FLOOR), spent
+    assert unspent == float(_FLOOR), unspent
+    assert spent == unspent
+
+
 def test_the_old_four_argument_call_still_works() -> None:
     """The streak is optional, so every existing caller and test keeps its
     meaning: no budget spent behaves exactly as before."""
@@ -175,11 +192,29 @@ def test_the_poll_loop_actually_feeds_the_streak_in() -> None:
         f"the scheduler is not given the streak: {args}"
     )
 
-    # And the bookkeeping: reset when a fresh capture arrives, count up when the
-    # drop is overdue, remember what was decided against.
-    reset = next(i for i, ln in enumerate(lines)
-                 if "self._drop_overdue_streak = 0" in ln and i > 2000)
-    window = [ln.strip() for ln in lines[reset - 2:reset + 6]]
-    assert any("_drop_anchor_advanced(" in ln for ln in window), window
+    # And the bookkeeping. Taken as the WHOLE block between the decision
+    # timestamp and the scheduler call, rather than a fixed number of lines
+    # around one of them: a line window broke the moment a debug log grew
+    # inside the block, which is a test that fails for the wrong reason.
+    start = next(i for i, ln in enumerate(lines)
+                 if "_decision_now = datetime.now(" in ln)
+    window = [ln.strip() for ln in lines[start:call]]
+    assert window, "the bookkeeping block is not above the scheduler call"
     assert any("self._drop_overdue_streak += 1" in ln for ln in window), window
     assert any("_drop_overdue(" in ln for ln in window), window
+
+    # The arguments, in order. A substring check on the call name alone passes
+    # with them swapped, and swapped they turn the predicate inside out: the
+    # recovery case (a feed delivering again, one drop late) would then keep
+    # standing down instead of resuming the alignment.
+    assert any(
+        "_drop_anchor_advanced(_prev_anchor, _cap_anchor)" in ln for ln in window
+    ), window
+
+    # The one line that makes the streak a streak. Deleting it leaves
+    # _drop_anchor_seen at its __init__ value of None forever, so
+    # _drop_anchor_advanced(None, anything) is True on every poll, the streak
+    # resets every poll, and #1850 is back in full — with every other test in
+    # this file, and the rest of the suite, still green. Measured: the suite
+    # passes with that single line removed.
+    assert any("self._drop_anchor_seen = _cap_anchor" in ln for ln in window), window
