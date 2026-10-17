@@ -46,6 +46,21 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Behoben / Fixed
+
+- **A Škoda account no longer gets rate-limited by this integration's own
+  retrying.** @indigomejor measured an account-level lockout and handed over
+  what it took to find the cause: roughly 176 requests an hour, an HTTP 429 and
+  then a hard refusal that pauses the integration for two hours. The official
+  Škoda channel kept calling after it had started failing, because the guard in
+  front of it only reacted to an explicit rate-limit answer — a 5xx was
+  invisible to it, so a channel that was down was asked again every cycle. It
+  now stands back for 5, then 15, then 30 minutes per channel after repeated
+  failures, and resets as soon as a call succeeds. The reactive rate-limit
+  guard still runs first, so nothing that worked before changes. He also ruled
+  out the duplicate GitHub suggested, on version, cause, remedy and repair
+  state, before filing ([#1850](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1850)).
+
 
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
 
