@@ -76,8 +76,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   startup check for the continuous data request, and the one-time export, still went out on
   Home Assistant's shared session. After a restart that session has no portal cookies, so
   the portal answered 401 and the repair asked you to sign in again, only for it to come
-  back on the next restart. Both now use the entry's own portal session. Thanks @gszigethy.
-
+  back on the next restart. Both now use the entry's own portal session for cookie
+  logins, including supplementary portals. Bearer-only device-grant entries skip the
+  cookie-only kickoff and must create requests in the portal UI; manual request and
+  export actions explain this requirement. An entry unloading during a data-request
+  check or export no longer attempts a closed session or saves a retry timestamp
+  that would delay provisioning after reload. Thanks @gszigethy.
 
 
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
