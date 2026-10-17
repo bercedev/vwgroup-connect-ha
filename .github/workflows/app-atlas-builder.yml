@@ -59,7 +59,15 @@ jobs:
         # Version polling only — see the Phase A.2 note in the header for why
         # APK extraction is not run here. Reads eight Google Play listings, so
         # this stays well under a minute.
-        run: python scripts/app_atlas/build_atlas.py
+        #
+        # The notice is the point of this step's own annotation: what this job
+        # does and what it does not do differ, and a green tick alone does not
+        # say which. Someone reading the run has to be able to tell that the
+        # APK findings on the atlas pages were not re-checked here, without
+        # going to read this file.
+        run: |
+          echo "::notice title=App Atlas::Version polling only — no APK was fetched or extracted in this run. Phases A.2/A.3 run locally (see docs/research/app-atlas/README.md), so the extraction findings on the atlas pages are whatever the last local run committed."
+          python scripts/app_atlas/build_atlas.py
 
       - name: Diff client_ids vs source (v2.10.4 watcher)
         # Reads .app-atlas-apk-cache, which is gitignored and written only by an
