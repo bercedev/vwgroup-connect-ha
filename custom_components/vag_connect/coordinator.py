@@ -2254,18 +2254,45 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             # <JWT>&code=<JWT>...`. Those JWTs base64-decode to the
             # user's email and a working access token. Log type only at
             # ERROR; route the message to DEBUG for triage.
+            # #1858 — the class name alone is useless for an ImportError:
+            # "setup failed: ImportError" is where @thomascombe's triage
+            # started and immediately stopped. He had to patch a local log in
+            # to find that repairs.py was importing a name his core did not
+            # have. An ImportError carries that in attributes rather than only
+            # in its message:
+            #   err.name       the module that failed  ("homeassistant.
+            #                  components.repairs")
+            #   err.name_from  the symbol that was missing from it
+            #                  ("RepairsFlowResult"); 3.12+, hence getattr
+            # Both are plain dotted names. Neither can carry a URL, an OAuth
+            # code or a token, which is the whole reason str(err) is withheld
+            # here — so these two are safe where the message is not.
+            #
+            # err.path is deliberately NOT logged. It is the filesystem path of
+            # the module, and on anything other than HAOS it carries the
+            # account name of whoever runs Home Assistant (measured: "...\
+            # Users\<account>\...\site-packages\..."). That is personal
+            # data for one line of triage convenience, and str(err) contains
+            # it too, which is the second reason the message stays out.
+            _detail = ""
+            if isinstance(err, ImportError):
+                _parts = [p for p in (err.name, getattr(err, "name_from", None)) if p]
+                if _parts:
+                    _detail = " [failed import: " + " -> ".join(_parts) + "]"
             _LOGGER.error(
-                "VW Group Connect setup failed: %s "
+                "VW Group Connect setup failed: %s%s "
                 "(message redacted, see DEBUG for details)",
                 type(err).__name__,
+                _detail,
             )
             # NB: NOT the raw err — the comment above is the reason (its str()
             # carries code=<JWT> → the user's email + a live token). The class
             # name is already logged at ERROR; nothing more is safe here. (#1355)
             _LOGGER.debug(
-                "VW Group Connect setup failed details withheld (%s) — the"
+                "VW Group Connect setup failed details withheld (%s%s) — the"
                 " exception message can carry an OAuth code/token",
                 type(err).__name__,
+                _detail,
             )
             return False
 
