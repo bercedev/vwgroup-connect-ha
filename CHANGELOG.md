@@ -46,7 +46,47 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Geändert / Changed
+
+- **The volkswagen.de HTTP/2 channel now uses Home Assistant's own SSL context
+  instead of a private one.** When that channel was built, handing httpx a
+  shared context was genuinely dangerous: httpx sets the ALPN protocols on
+  whatever context it is given, so a context shared with the rest of Home
+  Assistant made every *other* integration's connections try HTTP/2 and die
+  with a garbled status line. @eurojojo hit exactly that, and it surfaced as a
+  bogus "invalid credentials" on an unrelated login — the worst possible
+  symptom, because it sends people hunting for a password problem they do not
+  have ([#1679](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1679)). This integration therefore built its own
+  context, in a background thread, because loading the certificate bundle
+  blocks. Home Assistant 2026.2 fixed the problem at its root: it keeps a
+  separate context per protocol set, so the HTTP/2 one it hands out is a
+  different object from the HTTP/1.1 one everything else uses, and it builds
+  them all up front. Asking for that one removes the private context, the
+  background thread and the lock around it, and puts this channel on the
+  sanctioned route. Nothing changes for cars. Which context gets handed over
+  is now pinned by a test that checks the object itself, rather than one that
+  checked how it was built.
+
 ### Behoben / Fixed
+
+- **Setup no longer fails on Home Assistant versions before 2026.6.** Every
+  release since 4.13.0 stopped during setup with `setup failed: ImportError
+  (message redacted)` and then looped on "No vehicles found for this account",
+  because the repair-notice module imported a name — `RepairsFlowResult` —
+  that Home Assistant only began exporting in 2026.6. That name is used
+  nowhere except in type annotations, so it is no longer imported while the
+  integration runs. Two things made this far harder to diagnose than it needed
+  to be, and both are fixed as well: `hacs.json` still advertised `2024.4.0`,
+  so HACS offered the update to precisely the installations it would break (it
+  now declares `2026.6.0`), and the setup error withheld everything but the
+  exception class, so "ImportError" was the entire diagnosis. It now also names
+  the module and the symbol that could not be imported. Those are plain names;
+  the exception message and the module's file path stay withheld, because the
+  message can carry an access token and the path carries the account name of
+  whoever runs Home Assistant. @thomascombe diagnosed the whole chain on a
+  Golf 8 GTE — down to the file, the line and the version boundary, having
+  first added that missing log line locally himself — and confirmed the same
+  release sets up after upgrading the core ([#1858](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1858)).
 
 - **A Škoda account no longer gets rate-limited by this integration's own
   retrying.** @indigomejor measured an account-level lockout and handed over
