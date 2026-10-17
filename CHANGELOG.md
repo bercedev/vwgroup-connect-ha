@@ -60,6 +60,17 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   guard still runs first, so nothing that worked before changes. He also ruled
   out the duplicate GitHub suggested, on version, cause, remedy and repair
   state, before filing ([#1850](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1850)).
+- **Porsche remote commands no longer report "API error 201" while working.**
+  Every lock, unlock, climate and charging call surfaced an error in Home
+  Assistant although the car carried the command out. Porsche answers
+  "201 Created" for an accepted command, and this was the one brand client that
+  did not count 201 as success. The error message was the smaller half: the
+  failure happened before the response body was read, and that body is where
+  the command's own id and its "accepted" verdict live — which this integration
+  uses to check afterwards whether the car really did take the command. So a
+  command Porsche went on to reject looked exactly like one it performed.
+  @tp9csmv79n-code found the cause and verified the fix before filing
+  ([#1853](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1853)).
 
 
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
