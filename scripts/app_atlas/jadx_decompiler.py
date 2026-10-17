@@ -9,7 +9,7 @@ That's the basis for the cross-version semantic diff in
 ``version_diff.py``.
 
 This module is NOT called by the daily atlas builder. It's only
-invoked from the manual ``app-atlas-deep-diff.yml`` workflow when a
+invoked from a local ``run_deep_diff.py`` run when a
 maintainer wants to investigate what semantically changed between
 two specific versions of a brand's app.
 

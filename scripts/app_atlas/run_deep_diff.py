@@ -8,9 +8,12 @@ Usage:
         --old-version 2.15.0 \
         --new-version 2.16.0
 
-Invoked by ``.github/workflows/app-atlas-deep-diff.yml`` (manual
-``workflow_dispatch`` trigger). Does NOT run on a daily schedule —
-jadx full-decompile is too heavy.
+Run by hand. There was a ``workflow_dispatch`` workflow for this until
+2026-10-17; it was removed because the APK comes from Google Play via
+``apkeep``, which is deliberately absent from the runners (signing a
+disposable store account in from a shared CI address gets it locked), so
+a dispatch could never get past the fetch. It would not belong on a
+schedule either — a jadx full decompile is far too heavy for one.
 
 Output: writes
 ``docs/research/app-atlas/diffs/{brand}_{old}_vs_{new}.md`` and exits.
