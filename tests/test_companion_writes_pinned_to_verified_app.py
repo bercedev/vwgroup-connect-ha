@@ -197,3 +197,13 @@ def test_app_request_status_shows_why_commands_are_off() -> None:
 
     sensor = _Sensor.__new__(_Sensor)
     assert sensor._platform_attributes() == {"app_version": "4.7.0", "commands_enabled": False}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("version", "enabled"), [("4.8.1", True), ("4.6.4", True), ("4.7.0", False), ("9.9.9", False)])
+async def test_commands_enabled_follows_the_per_command_listing(version, enabled) -> None:
+    # 4.8.1 is listed per command, not in the preset: the App request status
+    # sensor's commands_enabled must say what the command gate does.
+    ch, _phone = _channel(version)
+    await ch._refresh_version_gate()
+    assert ch.writes_enabled is enabled

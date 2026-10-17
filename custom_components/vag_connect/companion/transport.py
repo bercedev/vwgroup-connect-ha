@@ -23,6 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 
 # uiautomator writes the dump here, then we read it back over the same shell.
 _DUMP_PATH = "/sdcard/vag_connect_ui.xml"
+# The hidden-node helper (a11y/README.md): pushed for a departure timer edit on
+# VW app 4.8.1 and removed afterwards. The hash pins the shipped build.
+A11Y_DEX_SHA256 = "93eaf4ef3a96af565cb06541bf0b1148f260af03c203b9c356469d4bcb507591"
+_A11Y_REMOTE = "/data/local/tmp/vag_connect_a11y.dex"
+_A11Y_RUN = f"CLASSPATH={_A11Y_REMOTE} app_process / A11yTree"
 
 # Where adb-shell persists the RSA keypair that authorises this HA instance to
 # the phone (the phone shows the "allow USB debugging" prompt once, then trusts
@@ -400,6 +405,68 @@ class NetworkAdbTransport:
             timeout_s,
         )
         await asyncio.sleep(0.6)
+
+    # -- hidden accessibility nodes (VW app 4.8.1 departure editor) -------------
+
+    can_read_hidden_nodes = True
+
+    async def a11y_prepare(self, timeout_s: float = 20.0) -> None:
+        """Push the hidden-node helper to the phone, checking its hash first."""
+        if self._device is None:
+            raise CompanionTransportError("not connected")
+        local = await asyncio.to_thread(_a11y_dex_path)
+        upload = asyncio.ensure_future(asyncio.to_thread(
+            functools.partial(
+                self._device.push, local, _A11Y_REMOTE,
+                transport_timeout_s=timeout_s, read_timeout_s=timeout_s,
+            )
+        ))
+        try:
+            await asyncio.shield(upload)
+        except asyncio.CancelledError:
+            # The upload thread cannot be stopped: let it finish, so the
+            # caller's cleanup removes the file instead of racing it.
+            try:
+                await upload
+            except Exception:  # noqa: BLE001 - only the cancellation matters here
+                pass
+            raise
+        except Exception as err:  # noqa: BLE001 - adb-shell raises many types
+            await self.close()
+            raise CompanionTransportError(
+                f"could not copy the editor helper to the phone ({type(err).__name__})"
+            ) from err
+
+    async def a11y_tree(self, timeout_s: float = 20.0) -> str:
+        """The foreground window's nodes, hidden ones included (A11yTree format)."""
+        out = await self.shell(_A11Y_RUN, timeout_s)
+        if "\nEND" not in f"\n{out}":
+            raise CompanionTransportError("the editor helper returned no screen")
+        return out
+
+    async def a11y_set_progress(self, index: int, value: float, timeout_s: float = 20.0) -> bool:
+        """Run SET_PROGRESS on the ``index``-th range node; True if accepted."""
+        out = await self.shell(f"{_A11Y_RUN} set {int(index)} {float(value):.1f}", timeout_s)
+        return f"SET {int(index)} true" in out
+
+    async def a11y_cleanup(self, timeout_s: float = 10.0) -> None:
+        """Remove the helper again. Raises on a dropped link, so the caller can reconnect."""
+        await self.shell(f"rm -f {_A11Y_REMOTE}", timeout_s)
+
+
+def _a11y_dex_path() -> str:
+    """The shipped helper, refused if it is not the reviewed build."""
+    import hashlib  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    path = Path(__file__).parent / "a11y" / "a11y_tree.dex"
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as err:
+        raise CompanionTransportError("the editor helper is missing from the install") from err
+    if digest != A11Y_DEX_SHA256:
+        raise CompanionTransportError("the editor helper does not match the reviewed build")
+    return str(path)
 
 
 def _decode_app_strings(encoded: str) -> dict[str, set[str]]:

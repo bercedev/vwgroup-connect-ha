@@ -65,6 +65,8 @@ from .resources import (
     find_request_limit,
     find_settings_entry,
     find_tile_entry,
+    find_vehicle_location,
+    clickable_target,
     is_power_budget_alert,
     power_budget_labels,
     read_battery_resources,
@@ -74,9 +76,12 @@ from .resources import (
     read_health_resources,
     read_overview_resources,
     read_settings_resources,
+    trip_card_families,
     trip_carousel_row,
 )
 from .departure import (
+    ComposeClock,
+    HiddenWheel,
     TIMER_CANCEL,
     TIMER_SAVE,
     WEEKDAYS,
@@ -84,7 +89,14 @@ from .departure import (
     departure_rows,
     find_toolbar_text,
     page_fields,
+    compose_page_top,
+    compose_repeat_switch,
+    compose_toolbar_leading,
+    is_compose_timer_page,
+    read_compose_clock,
+    read_timer_details,
     read_timer_page,
+    wheel_target,
 )
 from .charging_locations import (
     LOCATION_PARTS,
@@ -143,6 +155,7 @@ _SETTLE_MAX_DUMPS = 2              # dumps spent waiting for a Compose screen to
                                    # uiautomator dump is a round trip of a
                                    # second or more, so a four-step walk would
                                    # otherwise spend half a minute dumping.
+_TRIP_SWEEP_S = 24 * 3600.0       # full Driving data carousel sweep, at most daily
 _SLIDER_TRIES = 3                  # charge-limit taps, each read back, before
                                    # giving up without saving
 _SLIDER_READS = 3                  # dumps per slider tap to see it redrawn
@@ -156,6 +169,7 @@ _LIMIT_READBACK_DUMPS = 3          # dumps after a one-tap command, looking for
 _DAY_TAPS = 16                     # weekday/Repeat taps, each read back, before
                                    # giving up on a timer page without saving
 _CLOCK_TAPS = 40                   # one-step time wheel taps, each read back
+_WHEEL_SETTLE_S = 1.5              # 4.8.1 picker: a set wheel scrolls, then settles
                                    # (24 h: up to 12 hour + 6 minute steps)
 # Walks whose values change only after a trip or with new car data (driving
 # data, parking position, Vehicle Health) skip polls that cannot have changed
@@ -361,6 +375,10 @@ class CompanionChannel:
         self._nav_only: set[str] = set()
         self._screen_lock = _ScreenLock()
         self._app_strings: dict[str, set[str]] = {}
+        # Trip-card families a full Driving data sweep found; None until one ran.
+        # Swept again daily, so a card the app adds later is found.
+        self._trip_families: set[str] | None = None
+        self._trip_swept_at: float = 0.0
         # (app version, split list) the current table was successfully read for.
         self._strings_ok_key: tuple[str | None, tuple[str, ...]] | None = None
         self._strings_try_key: tuple[str | None, tuple[str, ...]] | None = None
@@ -380,13 +398,18 @@ class CompanionChannel:
     @property
     def writes_enabled(self) -> bool:
         """Whether writes are currently allowed, with all gates applied."""
+        preset_listed = app_version_listed(
+            self._live_app_version, self._preset.verified_app_version
+        )
         return (
             bool(self._version_ok)
             and self._preset.writable
-            and app_version_listed(self._live_app_version, self._preset.verified_app_version)
+            # The same rule as ``_command_gate``: a build the preset lists, or
+            # one an action lists itself after its own live test.
             and any(
-                a.app_versions is None
-                or app_version_listed(self._live_app_version, a.app_versions)
+                (a.app_versions is None and preset_listed)
+                or (a.app_versions is not None
+                    and app_version_listed(self._live_app_version, a.app_versions))
                 for a in self._preset.actions
             )
             and not self._is_rate_limited()
@@ -982,7 +1005,7 @@ class CompanionChannel:
         if self._preset.brand == "volkswagen" and nav.name == "vehicle_settings":
             values.update(read_settings_resources(detail, self._app_strings))
         if self._preset.brand == "volkswagen" and nav.name == "departure_times":
-            values.update(read_departure_timers(detail))
+            values.update(read_departure_timers(detail, self._app_strings))
         if self._preset.brand == "volkswagen" and nav.name in (
             "climate_detail", "climate_settings",
         ):
@@ -1085,28 +1108,52 @@ class CompanionChannel:
         return (detail if cleared else None), taps
 
     async def _read_driving_data(self, nodes: list[UiNode]) -> dict[str, object]:
-        """Both trip cards: the first as drawn, the second after one swipe.
+        """Collect cards in any order with at most two swipes each way.
 
-        The carousel shows the second card clipped at the edge, title and
-        labels but no values. A sideways swipe inside the carousel brings it
-        on screen; it moves the cards only and asks the car for nothing.
+        Swipe only a recognised horizontal band, never pull to refresh. A
+        stationary/covered screen or transport failure ends that direction.
+        Long-haul values stay separate from single and refuel/charging trips.
+        The first read sweeps both ends of the carousel, since a card left of
+        the starting one may not show its title, and remembers which cards
+        exist; later reads stop once every remembered card was read. The
+        sweep repeats daily, so a card the app adds later is found.
         """
         out = read_driving_data(nodes, self._app_strings)
-        row = trip_carousel_row(nodes, self._app_strings)
         swipe = getattr(self._t, "swipe", None)
-        if "refuel_trip_distance_km" in out or row is None or swipe is None:
+        if swipe is None:
             return out
-        left, top, right, bottom = row
-        y = (top + bottom) // 2
-        try:
-            await swipe(left + int((right - left) * 0.85), y, left + int((right - left) * 0.15), y, 400)
-        except CompanionTransportError:
-            return out
-        swiped, cleared = await self._dump_and_clear_overlays(await self._settle())
-        if cleared:
-            for key, val in read_driving_data(swiped, self._app_strings).items():
-                if key.startswith("refuel_trip_"):
+        sweep = self._trip_families is None or self._now() - self._trip_swept_at >= _TRIP_SWEEP_S
+        families = {"last_trip", "refuel_trip"} | (self._trip_families or set())
+        for forward in (True, False):
+            for _ in range(2):
+                families |= trip_card_families(nodes, self._app_strings)
+                wanted = {
+                    f"{prefix}_{part}" for prefix in families
+                    for part in ("distance_km", "duration_min", "avg_speed_kmh")
+                }
+                row = trip_carousel_row(nodes, self._app_strings)
+                if row is None or (not sweep and wanted <= out.keys()):
+                    return out
+                left, top, right, bottom = row
+                y = (top + bottom) // 2
+                x1, x2 = left + int((right - left) * 0.85), left + int((right - left) * 0.15)
+                if not forward:
+                    x1, x2 = x2, x1
+                try:
+                    await swipe(x1, y, x2, y, 400)
+                    swiped, cleared = await self._dump_and_clear_overlays(await self._settle())
+                except CompanionTransportError:
+                    return out
+                if not cleared:
+                    return out
+                for key, val in read_driving_data(swiped, self._app_strings).items():
                     out.setdefault(key, val)
+                if swiped == nodes:
+                    break
+                nodes = swiped
+        if sweep:
+            self._trip_families = families | trip_card_families(nodes, self._app_strings)
+            self._trip_swept_at = self._now()
         return out
 
     async def _read_departure_pages(self, nodes: list[UiNode]) -> dict[str, object]:
@@ -1120,11 +1167,12 @@ class CompanionChannel:
         out: dict[str, object] = {}
         for slot in range(1, min(3, len(departure_rows(nodes))) + 1):
             page, nodes = await self._open_timer_page(nodes, slot)
-            if page is None:
+            details = read_timer_details(nodes, slot)
+            if page is None and not details and not is_compose_timer_page(nodes):
                 if not departure_rows(nodes):
                     await self._back_to_timer_list()  # off the list: one step back
                 break
-            out.update(page_fields(page, slot))
+            out.update(details)
             back = await self._back_to_timer_list()
             if back is None:
                 break
@@ -1250,10 +1298,12 @@ class CompanionChannel:
         if point is None:
             return None, nodes
         await self._t.tap(*point)
-        settled = await self._settle(lambda n: read_timer_page(n) is not None)
+        settled = await self._settle(
+            lambda n: read_timer_page(n) is not None or is_compose_timer_page(n)
+        )
         page_nodes, cleared = await self._dump_and_clear_overlays(settled)
         if not cleared or self._limit_on_screen(page_nodes):
-            return None, page_nodes
+            return None, []
         return read_timer_page(page_nodes), page_nodes
 
     async def _back_to_timer_list(self) -> list[UiNode] | None:
@@ -1296,7 +1346,13 @@ class CompanionChannel:
         return scrolled if cleared else nodes
 
     def _step_node(self, nodes: list[UiNode], step: "ActionSelector") -> UiNode | None:
+        if step.action == "find_vehicle":
+            node = find_vehicle_location(nodes, self._app_strings)
+            if node is not None:
+                return node
         node = find_node_for(nodes, step)
+        if step.action == "find_vehicle":
+            return clickable_target(nodes, node) if node is not None else None
         if step.action == "open_charge_detail" and node is None:
             node = find_battery_tile(nodes, self._app_strings)
         if step.action == "open_vehicle_settings" and node is None:
@@ -2245,6 +2301,8 @@ class CompanionChannel:
         """Set the timer's page, Save, and read it back; the list after."""
         page, nodes = await self._open_timer_page(listing, slot)
         if page is None:
+            if is_compose_timer_page(nodes):
+                return await self._edit_compose_timer(listing, nodes, slot, clock, days, repeat)
             raise CompanionWriteBlocked(f"could not open departure timer {slot} in the app")
         if page.time != departure_rows(listing)[slot - 1].time:
             raise CompanionWriteBlocked(
@@ -2309,6 +2367,236 @@ class CompanionChannel:
         if back is None:
             raise CompanionWriteBlocked("the app did not return to the Departure times list")
         return back
+
+    async def _edit_compose_timer(
+        self,
+        listing: list[UiNode],
+        nodes: list[UiNode],
+        slot: int,
+        clock: tuple[int, int] | None,
+        days: tuple[str, ...] | None,
+        repeat: bool | None,
+    ) -> list[UiNode]:
+        """The VW 4.8.1 editor: hidden wheels through their own action, days by button.
+
+        The picker is hidden from uiautomator, so its wheels are read and set
+        through the a11y helper (``a11y/``): each wheel's value comes from its
+        state description, and SET_PROGRESS moves it, read back before Save.
+        The day buttons show no state, so a change of days could only be
+        checked after Save and is refused; the days the timer has come from
+        the list's recurrence label, which a request must match. Repeat is
+        read on the page. Save is pressed only when the app offers it, which it
+        does only while the page differs from the saved timer. Anything that
+        stops the edit before Save presses the page's X, which restores the
+        saved timer, so nothing is sent.
+        """
+        t = self._t
+        row = departure_rows(listing)[slot - 1]
+        opened = read_departure_timers(listing, self._app_strings).get(
+            f"departure_timer_{slot}_weekdays"
+        )
+        switch = compose_repeat_switch(nodes)
+        page_top = compose_page_top(nodes)
+        if not getattr(t, "can_read_hidden_nodes", False):
+            await self._back_to_timer_list()
+            raise CompanionWriteBlocked(
+                "editing a departure timer in this app version needs a direct ADB "
+                "connection to the phone; nothing was changed"
+            )
+        if opened is None or switch is None or page_top is None:
+            await self._back_to_timer_list()
+            raise CompanionWriteBlocked(
+                f"could not read departure timer {slot}'s days or Repeat; nothing was changed"
+            )
+        opened_days = tuple(str(opened).split(","))
+        sent = False
+        staged = False  # a page control or wheel was touched, whatever Save shows
+        try:
+            await t.a11y_prepare()  # type: ignore[attr-defined]
+            now = read_compose_clock(await t.a11y_tree())  # type: ignore[attr-defined]
+            if now is None:
+                raise CompanionWriteBlocked(
+                    "could not read the departure time wheels; nothing was saved"
+                )
+            if now.time != row.time:
+                raise CompanionWriteBlocked(
+                    f"the page that opened does not match departure timer {slot}'s row; "
+                    "nothing was changed"
+                )
+            want_clock = clock if clock is not None else (now.hour_value, now.minute_value)
+            want_days = days if days is not None else opened_days
+            want_repeat = switch.checked if repeat is None else repeat
+            want = (f"{want_clock[0]:02d}:{want_clock[1]:02d}", want_days, want_repeat)
+            if not want_repeat and len(want_days) != 1:
+                raise CompanionWriteBlocked(
+                    "a departure timer without Repeat runs once, on exactly one weekday"
+                )
+            if want_clock[1] % 5:
+                raise CompanionWriteBlocked("the app sets departure times in 5-minute steps")
+            if (now.time, opened_days, switch.checked) == want:
+                back = await self._back_to_timer_list()
+                if back is None:
+                    raise CompanionWriteBlocked("the app did not return to the Departure times list")
+                return back  # nothing to change, nothing sent
+            if want_days != opened_days:
+                # The page never shows which days are on, so a change could only
+                # be checked after Save: refused, as nothing unverified is sent.
+                raise CompanionWriteBlocked(
+                    f"app {self._live_app_version} does not show which weekdays are "
+                    "selected, so they cannot be checked before saving; change the "
+                    "days in the app (time and Repeat can be set here). Nothing was changed"
+                )
+            if switch.checked != want_repeat:
+                staged = True
+                nodes = await self._tap_compose_page(switch)
+                switch = compose_repeat_switch(nodes)
+                if switch is None or switch.checked != want_repeat:
+                    raise CompanionWriteBlocked("Repeat did not take; nothing was saved")
+            if (now.hour_value, now.minute_value) != want_clock:
+                staged = True
+                now = await self._set_compose_clock(now, *want_clock)
+            nodes, cleared = await self._dump_and_clear_overlays()
+            if self._limit_on_screen(nodes):
+                self._trip_rate_limit()
+                raise CompanionWriteBlocked(_LIMIT_REASON)
+            if not cleared or not is_compose_timer_page(nodes):
+                raise CompanionWriteBlocked(
+                    "a message covered the departure timer before Save; nothing was saved"
+                )
+            save = find_toolbar_text(nodes, self._toolbar_labels(TIMER_SAVE, "save"), page_top)
+            if save is None or save.tap_point is None:
+                raise CompanionWriteBlocked("the app did not offer Save for the departure timer")
+            sent = True
+            self._stamp_write()
+            for key in (f"departure_timer_{slot}_time", f"departure_timer_{slot}_weekdays",
+                        f"departure_timer_{slot}_repeat", f"departure_timer_{slot}_enabled",
+                        "departure_timer_enabled_count"):
+                self._nav_cache.pop(key, None)
+            self._nav_only.add("departure_times")
+            await t.tap(*save.tap_point)
+            listing = await self._await_timer_saved(slot, want[0])
+        except BaseException as err:
+            # Also on task cancellation: a staged page must not be left behind.
+            if not sent and staged:
+                await self._cancel_compose_page(page_top)
+            if isinstance(err, CompanionTransportError):
+                raise CompanionWriteBlocked(str(err)) from err
+            raise
+        finally:
+            await self._a11y_cleanup()
+        # The list shows the time and the days; the page shows Repeat.
+        shown = read_departure_timers(listing, self._app_strings)
+        shown_days = shown.get(f"departure_timer_{slot}_weekdays")
+        _page, page_nodes = await self._open_timer_page(listing, slot)
+        saved_switch = compose_repeat_switch(page_nodes) if is_compose_timer_page(page_nodes) else None
+        back = await self._back_to_timer_list()
+        got = (
+            shown.get(f"departure_timer_{slot}_time"),
+            tuple(str(shown_days).split(",")) if shown_days else None,
+            saved_switch.checked if saved_switch is not None else None,
+        )
+        if got != want:
+            raise CompanionWriteBlocked(
+                f"the app shows departure timer {slot} as {got[0]} "
+                f"{','.join(got[1] or ('?',))} repeat={got[2]} after saving"
+            )
+        fields = {
+            f"departure_timer_{slot}_time": want[0],
+            f"departure_timer_{slot}_weekdays": ",".join(want_days),
+            f"departure_timer_{slot}_repeat": want_repeat,
+            f"departure_timer_{slot}_enabled": shown.get(f"departure_timer_{slot}_enabled"),
+            "departure_timer_enabled_count": shown.get("departure_timer_enabled_count"),
+        }
+        for key, val in fields.items():
+            if val is None:
+                continue
+            self._nav_cache[key] = val
+            self._nav_read_at[key] = self._wall()
+            self._nav_cache_from[key] = "departure_times"
+        if back is None:
+            raise CompanionWriteBlocked("the app did not return to the Departure times list")
+        return back
+
+    async def _tap_compose_page(self, node: UiNode) -> list[UiNode]:
+        """Tap one control on the 4.8.1 timer page and read the page back."""
+        if node.tap_point is None:
+            raise CompanionWriteBlocked("a departure timer control has no place on screen")
+        await self._t.tap(*node.tap_point)
+        nodes, cleared = await self._dump_and_clear_overlays(await self._settle())
+        if self._limit_on_screen(nodes):
+            self._trip_rate_limit()
+            raise CompanionWriteBlocked(_LIMIT_REASON)
+        if not cleared or not is_compose_timer_page(nodes):
+            raise CompanionWriteBlocked("a message covered the departure timer; nothing was saved")
+        return nodes
+
+    async def _set_compose_clock(self, now: ComposeClock, hour: int, minute: int) -> ComposeClock:
+        """Set the hidden wheels (minute, hour, AM/PM), each read back."""
+        t = self._t
+        # One wheel per round; spare rounds absorb a wheel that carried another.
+        for _ in range(5):
+            plan: list[tuple[HiddenWheel, float]] = []
+            if now.minute_value != minute:
+                plan.append((now.minute, wheel_target(now.minute, now.minute_value // 5, minute // 5, 12)))
+            elif now.meridiem is not None and now.hour_value % 12 != hour % 12:
+                plan.append((now.hour, wheel_target(now.hour, now.hour_value % 12, hour % 12, 12)))
+            elif now.meridiem is None and now.hour_value != hour:
+                plan.append((now.hour, wheel_target(now.hour, now.hour_value, hour, 24)))
+            elif now.meridiem is not None and now.pm != (hour >= 12):
+                plan.append((now.meridiem, 1.0 if hour >= 12 else 0.0))
+            if not plan:
+                return now
+            wheel, target = plan[0]
+            if not await t.a11y_set_progress(wheel.index, target):  # type: ignore[attr-defined]
+                raise CompanionWriteBlocked("a departure time wheel did not move; nothing was saved")
+            await asyncio.sleep(_WHEEL_SETTLE_S)
+            again = read_compose_clock(await t.a11y_tree())  # type: ignore[attr-defined]
+            if again is None:
+                raise CompanionWriteBlocked("could not read the departure time wheels; nothing was saved")
+            now = again
+        if (now.hour_value, now.minute_value) != (hour, minute):
+            raise CompanionWriteBlocked("the departure time wheels did not settle; nothing was saved")
+        return now
+
+    async def _cancel_compose_page(self, page_top: int) -> None:
+        """Undo staged changes with the page's leading control; best effort.
+
+        While the page differs from the saved timer that control is X, which
+        restores it; otherwise it is the back arrow, which leaves without
+        saving. Either way nothing is sent. A dropped link gets one reconnect,
+        as in ``_cancel_timer_page``.
+        """
+        save_labels = self._toolbar_labels(TIMER_SAVE, "save")
+        for attempt in range(2):
+            try:
+                if attempt or not self._t.connected:
+                    await self._t.connect()
+                nodes, _cleared = await self._dump_and_clear_overlays()
+                if not is_compose_timer_page(nodes):
+                    return
+                cancel = compose_toolbar_leading(nodes, page_top)
+                if cancel is None or cancel.tap_point is None:
+                    _LOGGER.warning("companion: the departure timer page shows no X to cancel with")
+                    return
+                await self._t.tap(*cancel.tap_point)
+                after, _cleared = await self._dump_and_clear_overlays(await self._settle())
+                if is_compose_timer_page(after) and find_toolbar_text(after, save_labels, page_top):
+                    _LOGGER.warning("companion: the departure timer page still offers Save after X")
+                return
+            except CompanionTransportError:
+                continue
+        _LOGGER.warning("companion: could not cancel the departure timer page")
+
+    async def _a11y_cleanup(self) -> None:
+        """Remove the helper from the phone, reconnecting once if the link dropped."""
+        for attempt in range(2):
+            try:
+                if attempt or not self._t.connected:
+                    await self._t.connect()
+                await self._t.a11y_cleanup()  # type: ignore[attr-defined]
+                return
+            except CompanionTransportError:
+                continue
 
     def _toolbar_labels(self, key: str, fallback: str) -> set[str]:
         """The installed app's word for a toolbar item; English without tables."""
@@ -2414,7 +2702,7 @@ class CompanionChannel:
             if self._limit_on_screen(nodes):
                 self._trip_rate_limit()
                 raise CompanionWriteBlocked(_LIMIT_REASON)
-            if read_timer_page(nodes) is not None:
+            if read_timer_page(nodes) is not None or is_compose_timer_page(nodes):
                 continue  # still sending, or the app kept the page
             rows = departure_rows(nodes)
             if cleared and len(rows) >= slot:
@@ -2604,10 +2892,15 @@ class CompanionChannel:
                 f"match the one this preset was verified against "
                 f"({_want_str}). Reads still work."
             )
-        # Rule 9: a newer build keeps reads, but writes need a listed build.
-        if not app_version_listed(self._live_app_version, self._preset.verified_app_version):
-            raise CompanionAppVersionUnverified(self._live_app_version)
         spec = next((a for a in self._preset.actions if a.action == action), None)
+        # Rule 9: a newer build keeps reads, but writes need a listed build:
+        # the preset's, or one this action lists after its own live test.
+        if not (
+            app_version_listed(self._live_app_version, self._preset.verified_app_version)
+            or (spec is not None and spec.app_versions
+                and app_version_listed(self._live_app_version, spec.app_versions))
+        ):
+            raise CompanionAppVersionUnverified(self._live_app_version)
         if spec is None:
             raise CompanionWriteBlocked(f"no confirmed control for '{action}'")
         if spec.app_versions and not app_version_listed(

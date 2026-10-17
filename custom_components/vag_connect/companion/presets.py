@@ -509,13 +509,13 @@ _VW = BrandPreset(
             action="start_charging",
             content_desc_re=r"^Start charging(?:\.|$)",
             nav_read="charge_detail",
-            app_versions=("4.6.4", "4.3.2"),
+            app_versions=("4.8.1", "4.6.4", "4.3.2"),
         ),
         ActionSelector(
             action="stop_charging",
             content_desc_re=r"^Stop charging(?:\.|$)",
             nav_read="charge_detail",
-            app_versions=("4.6.4", "4.3.2"),
+            app_versions=("4.8.1", "4.6.4", "4.3.2"),
         ),
         # @gszigethy Tiguan, 4.3.2: the "Charging up to" slider on vehicle
         # Settings. The slider has no node; companion/charge_target.py places
@@ -524,7 +524,7 @@ _VW = BrandPreset(
             action="set_charge_target",
             resource_id="vwd_save_button",
             nav_read="vehicle_settings",
-            app_versions=("4.6.4", "4.3.2"),
+            app_versions=("4.8.1", "4.6.4", "4.3.2"),
         ),
         # @gszigethy Tiguan, 4.3.2: "Synchronise now" under Vehicle data, at the
         # bottom of vehicle Settings, asks the car for fresh data. Matched by id
@@ -533,22 +533,24 @@ _VW = BrandPreset(
         # Departure times list sends at once (same list on 4.3.2), and its
         # page sets time, days and Repeat, sent with the toolbar's Save.
         # companion/departure.py finds every control; matched by id there.
+        # 4.8.1 (2026-10-17, live): the list switch as before; the Compose
+        # editor through the a11y helper (departure.read_compose_clock).
         ActionSelector(
             action="toggle_departure_timer",
             nav_read="departure_times",
-            app_versions=("4.6.4", "4.3.2"),
+            app_versions=("4.8.1", "4.6.4", "4.3.2"),
         ),
         ActionSelector(
             action="edit_departure_timer",
             resource_id="time_picker",
             nav_read="departure_times",
-            app_versions=("4.6.4",),
+            app_versions=("4.8.1", "4.6.4"),
         ),
         ActionSelector(
             action="sync_vehicle",
             resource_id="subtitle_cta",
             nav_read="vehicle_settings",
-            app_versions=("4.6.4", "4.3.2"),
+            app_versions=("4.8.1", "4.6.4", "4.3.2"),
         ),
     ),
     # v2.26.0 (C9) — charge target / power / remaining-time live behind the
@@ -905,11 +907,8 @@ _VW = BrandPreset(
         ),
         NavReadSelector(
             name="driving_data",
-            # The overview's Driving data tile. Its trip cards sit side by
-            # side in a carousel: "Last single trip" first, then "From
-            # charging or refuelling". ``read_driving_data`` reads them by the
-            # app's own labels and units, swiping the carousel (sideways only,
-            # never a pull-to-refresh) to bring the second card on screen.
+            # Trip cards may start with long-haul, single or refuel/charging.
+            # Read each family separately, swiping sideways within the carousel.
             steps=(
                 ActionSelector(
                     action="open_driving_data",
@@ -924,6 +923,8 @@ _VW = BrandPreset(
             resource_targets=(
                 "last_trip_distance_km", "last_trip_duration_min", "last_trip_avg_speed_kmh",
                 "refuel_trip_distance_km", "refuel_trip_duration_min", "refuel_trip_avg_speed_kmh",
+                "companion_long_trip_distance_km", "companion_long_trip_duration_min",
+                "companion_long_trip_avg_speed_kmh",
             ),
         ),
         NavReadSelector(
@@ -994,7 +995,7 @@ _VW = BrandPreset(
                 ),
                 ActionSelector(
                     action="find_vehicle",
-                    content_desc_re=r"^(?:Find\s*vehicle|Fahrzeug\s*finden)$",
+                    content_desc_re=r"^(?:Vehicle\s*location|Find\s*vehicle|Fahrzeug\s*finden)$",
                 ),
                 ActionSelector(
                     action="open_parking_marker",
@@ -1107,7 +1108,7 @@ _VW = replace(_VW, actions=_VW.actions + _VW_CLIMATE_ACTIONS)
 # is saved) sends. ``CompanionChannel.set_climate_setting`` walks it and reads
 # the saved state back. Mapped against the 4.6.4 captures; on 4.3.2 the page
 # itself is identical, but its Zones page and Save were never captured there.
-CLIMATE_SETTINGS_APP_VERSIONS: tuple[str, ...] = ("4.6.4",)
+CLIMATE_SETTINGS_APP_VERSIONS: tuple[str, ...] = ("4.8.1", "4.6.4")
 # Setting (the VehicleData field the read fills) → its logical action.
 CLIMATE_SETTING_ACTIONS: dict[str, str] = {
     "climate_at_unlock": "set_climate_at_unlock",

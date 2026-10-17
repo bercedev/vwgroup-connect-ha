@@ -88,7 +88,7 @@ def test_language_does_not_matter():
 def test_preset_maps_the_sync_to_its_own_command():
     assert SYNC_SPEC.resource_id == "subtitle_cta"
     assert SYNC_SPEC.nav_read == "vehicle_settings"
-    assert SYNC_SPEC.app_versions == ("4.6.4", "4.3.2")
+    assert SYNC_SPEC.app_versions == ("4.8.1", "4.6.4", "4.3.2")
     assert ACTION_TO_COMMAND["sync_vehicle"] == "command_sync_vehicle"
 
 

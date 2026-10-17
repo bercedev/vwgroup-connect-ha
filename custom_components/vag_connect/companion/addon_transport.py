@@ -59,6 +59,10 @@ def _addon_reason(error: object) -> str:
 class AddOnAdbTransport(NetworkAdbTransport):
     """Runs shell commands through the add-on's local HTTP API."""
 
+    # The add-on API has no file push: the 4.8.1 departure editor helper cannot
+    # be copied to the phone, so that edit is refused before the page is touched.
+    can_read_hidden_nodes = False
+
     def __init__(
         self,
         host: str,

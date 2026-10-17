@@ -9,12 +9,12 @@ send to the car, how it is built, and where it is known to be weak.
 | | |
 |---|---|
 | **Applies to** | 5.0.0 |
-| **Baseline app** | VW app **4.6.4** (`com.volkswagen.weconnect`); 4.3.2 is still read-compatible |
+| **Baseline app** | VW app **4.6.4** (`com.volkswagen.weconnect`) and **4.8.1** (reads and every command verified live); 4.3.2 is still read-compatible |
 | **Status** | experimental, opt-in; Volkswagen only is verified |
 | **Credit** | The channel, its transport, selectors and navigation are Prash Balan's ([@its-me-prash](https://github.com/its-me-prash)). The VW app 4.6.4 mapping, the controls, the extra reads and the safety gates described here were developed in [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha). App captures came from @plainmad (Mk8 Golf GTE), @kgroshert (ID.4, e-up!), @WEZANGO (CUPRA Born) and @gszigethy (Tiguan eHybrid), and the prior art of @ckomma. |
 
 > [!NOTE]
-> The Companion is **experimental and opt-in**. Only Volkswagen is verified, on VW app 4.6.4 (and 4.3.2 for reads). Everything that taps the
+> The Companion is **experimental and opt-in**. Only Volkswagen is verified, on VW app 4.6.4 and 4.8.1 (and 4.3.2 for reads). Everything that taps the
 > phone is off until you switch it on, and every control is checked on screen before and after it taps.
 
 Wording used throughout: **walk** is one trip through the app's screens (tap in, read,
@@ -94,7 +94,7 @@ controls. The whole contract is **screen in, taps out**.
 
 These are the rules the code is held to. They explain most of the behaviour below.
 
-1. **Screen in, taps out.** Besides screen navigation the Companion only does the transport and app-lifecycle work listed in [3.9](#39-transports): waking the display, starting or force-stopping the app, reading the app's resource table, and a temporary dump file. A read taps only the navigation needed to reach a screen and presses BACK to leave.
+1. **Screen in, taps out.** Besides screen navigation the Companion only does the transport and app-lifecycle work listed in [3.9](#39-transports): waking the display, starting or force-stopping the app, reading the app's resource table, a temporary dump file, and for a 4.8.1 departure edit a temporary accessibility helper. A read taps only the navigation needed to reach a screen and presses BACK to leave.
 2. **A separate stream.** Companion values feed the same fields the VW cloud parser
    (`cariad/api/vw_eu.py`) fills for the same value, and never a field that only the
    EU Data Act portal fills. Cloud and EU Data Act parsers are not changed for the
@@ -456,14 +456,14 @@ that cannot be closed) yields no values rather than wrong ones, and the last val
 
 | Control (entity or service) | What it does in the app | Listed builds | Checks |
 |---|---|---|---|
-| Charging switch, start/stop charging | Opens the charge sheet and taps Start or Stop once. A greyed-out Start is never pressed | 4.6.4, 4.3.2 | The CTA's disabled hint is checked (Compose can report `enabled=true`); the next poll supplies the real state |
-| Charge Target number | Vehicle Settings → moves the *Charging up to* slider (50–100 %, steps of 10) → Save | 4.6.4, 4.3.2 | Each slider tap is read back from the row's "NN %"; up to 3 taps; unreachable → the app's X cancels, nothing is sent; Save is accepted when the synchronisation ends and the overview returns, or when the Settings row shows the target without a Save button |
-| Climate Control (climate entity: on / off, preset) | Air Conditioning sheet → Start or Stop (mode picker only to switch to or from window-heating-only) | 4.6.4, 4.3.2 | Mode and dial read back before Start; off is the app's single Stop, which ends either mode; a preset change while running is refused; an unknown mode refuses Start |
+| Charging switch, start/stop charging | Opens the charge sheet and taps Start or Stop once. A greyed-out Start is never pressed | 4.8.1, 4.6.4, 4.3.2 | The CTA's disabled hint is checked (Compose can report `enabled=true`); the next poll supplies the real state |
+| Charge Target number | Vehicle Settings → moves the *Charging up to* slider (50–100 %, steps of 10) → Save | 4.8.1, 4.6.4, 4.3.2 | Each slider tap is read back from the row's "NN %"; up to 3 taps; unreachable → the app's X cancels, nothing is sent; Save is accepted when the synchronisation ends and the overview returns, or when the Settings row shows the target without a Save button |
+| Climate Control (climate entity: on / off, preset) | Air Conditioning sheet → Start or Stop (mode picker only to switch to or from window-heating-only) | 4.8.1, 4.6.4, 4.3.2 | Mode and dial read back before Start; off is the app's single Stop, which ends either mode; a preset change while running is refused; an unknown mode refuses Start |
 | Climate temperature on a running climate | Moves the dial: one step is a tap on the next label, two steps one slow drag | same | The dial must show °C and be inside 15.5–30 °C; read back after every gesture; more than 2 °C is refused before anything moves |
-| Climate at unlock, Automatic window heating, Climate zones | Air Conditioning Settings → toggle → Save | 4.6.4 | The page is read back; a value already in place sends nothing |
-| Departure Timer switches | Taps the row's switch (the app sends at once) | 4.6.4, 4.3.2 | Watched for a flip back (the car did not accept it) |
-| Departure Timer time, `set_departure_timer` | The timer's page: time wheels, weekdays, Repeat → Save | 4.6.4 | Saved only when the page shows exactly what was asked; the timer is matched by content; two timers with the same time are refused; `enabled: false` with an edit is refused (Save switches the timer on) |
-| Refresh vehicle data, Vehicle sync interval | Vehicle Settings → *Synchronise now* | 4.6.4, 4.3.2 | A power-budget pause allows one probe per 4 h; a backend pause allows none |
+| Climate at unlock, Automatic window heating, Climate zones | Air Conditioning Settings → toggle → Save | 4.8.1, 4.6.4 | The page is read back; a value already in place sends nothing |
+| Departure Timer switches | Taps the row's switch (the app sends at once) | 4.8.1, 4.6.4, 4.3.2 | Watched for a flip back (the car did not accept it) |
+| Departure Timer time, `set_departure_timer` | The timer's page: time wheels, weekdays, Repeat → Save | 4.8.1, 4.6.4 | Saved only when the page shows exactly what was asked; the timer is matched by content; two timers with the same time are refused; `enabled: false` with an edit is refused (Save switches the timer on). On 4.8.1 the picker is hidden from uiautomator: its wheels are read and set through the [a11y helper](#departure-editor-on-481) and read back before Save. The 4.8.1 page never shows which weekdays are on, so a change of days is refused there (time and Repeat can be set) |
+| Refresh vehicle data, Vehicle sync interval | Vehicle Settings → *Synchronise now* | 4.8.1, 4.6.4, 4.3.2 | A power-budget pause allows one probe per 4 h; a backend pause allows none |
 
 **How a command runs.** One command at a time, sharing the screen lock with polls. The channel brings
 the app forward, refreshes the version gate, passes the gate above, taps along the shortest path, reads
@@ -696,7 +696,9 @@ exception); 60 s minimum gap; language/limit-detection prerequisite; overview on
   version disables taps altogether; plain overview reads continue.
 - **Listed builds** for the VW preset (the ceiling for reads and the base for commands): 4.6.4, 4.3.2, 3.64.0, 3.63.2, 4.2.1 (We Connect reports its version
   inconsistently: the store's "4.3.2" and internal names like "3.64.0" ship the same accessibility tree).
-  Every command narrows this further (4.6.4 and 4.3.2, or 4.6.4 only); see [2.6](#26-commands). Overlay dismissal and recovery to the overview can run before the final language check.
+  Every command narrows this further (4.6.4 and 4.3.2, or 4.6.4 only); see [2.6](#26-commands). A command
+  may also list a newer build itself once it was verified live on it: 4.8.1 is listed per command, not in
+  the preset, so builds between 4.6.4 and 4.8.1 (none verified) keep their reads. Overlay dismissal and recovery to the overview can run before the final language check.
 - **Serialised.** One command at a time, under the same lock as polls; a command waiting for a walk holds
   until it finishes.
 - **Read-back everywhere.** Each tap's effect is read from the next dump; a mismatch stops the command and cancels staged changes where the cleanup succeeds. Earlier taps may already have sent a request (a moved climate dial), and cancellation is not guaranteed after a transport failure.
@@ -741,6 +743,7 @@ The three share the core screen interface; capabilities differ (see the relay be
 | `app_resource_paths`, `battery_strings` | The string table ([3.5](#35-language-independence)) |
 | `wake`, `sleep_if_enabled`, `force_stop_if_enabled` | The two phone options |
 | `tap_burst` | A spaced run of taps for the rare case a gesture needs it; a shell script that stops when the gap between taps exceeds 0.7 s |
+| `a11y_prepare`, `a11y_tree`, `a11y_set_progress`, `a11y_cleanup` | The hidden-node helper for the VW 4.8.1 departure editor (below); `NetworkAdbTransport` only |
 
 - **`NetworkAdbTransport`** uses `adb-shell` over TCP, with the blocking calls on a worker thread. It cannot
   do wireless debugging's TLS pairing.
@@ -750,6 +753,35 @@ The three share the core screen interface; capabilities differ (see the relay be
   (two entries with the same token fail closed); unknown tokens answer 404. **No agent app exists.** `AgentRelayTransport` has no resource extraction, no arbitrary shell, no tap bursts and no effective force-stop.
 - A dump costs about a second or more over ADB. The channel keeps waits tight (two dumps to settle a screen)
   and uses one shell call per dump.
+
+#### Departure editor on 4.8.1
+
+VW app 4.8.1 rebuilt the departure timer page in Compose and hides its time picker with
+`hideFromAccessibility()`; its day buttons expose no selected state. `uiautomator dump` skips hidden
+nodes, but Compose still exports them: each wheel is a node with a range, the shown value as its state
+description, and `SET_PROGRESS` (the wheel's own "scroll to item" action). The Companion therefore ships
+a 6 kB helper, `companion/a11y/a11y_tree.dex` (source and build steps beside it), and only for this edit:
+
+- pushed to `/data/local/tmp` over the existing ADB connection right before the edit, after its SHA-256
+  is checked against the reviewed build, and removed afterwards (best effort: one reconnect; a phone that
+  stays unreachable keeps the 6 kB file until the next edit overwrites or removes it). Nothing is installed; it runs as the
+  shell user through `app_process`, like `uiautomator`.
+- it prints the foreground window's nodes, hidden ones included, and on request runs `SET_PROGRESS` on
+  one range node. It never taps, saves or sends; the channel presses Save itself.
+- the wheels are found by structure (two-digit wheels left to right, plus the two-value AM/PM wheel on a
+  12-hour phone), not by their labels, so the edit works in any app language.
+
+The edit: Repeat is read and set on the page, then each wheel is set and read back. Right before Save
+the page must be the editor with no message over it and no request-limit alert. Save is pressed only
+when the app offers it, which it does only while the page differs from the saved timer. Afterwards the
+list must show the new time and the reopened page the new Repeat. A failure after a change was staged
+(including task cancellation and a dropped link) triggers a best-effort cancellation with the page's X,
+which restores the saved timer; it and the helper's removal each retry once after reconnecting. The day
+buttons expose no state, so a change of days could only be checked after Save: it is refused after the
+page opened, before any editor control is changed, and the days are changed in the app. A request must
+match the days on the list. A transport without the helper (the add-on bridge, the relay) refuses the
+edit the same way. Live checks were on one Tiguan, in English, on a 12-hour clock; other vehicles are
+unvalidated. Tests exercise label variations and a synthetic 24-hour picker derived from these captures.
 
 ### 3.10 Security model
 
@@ -944,13 +976,15 @@ whether the pause was active, and attach the integration's diagnostics (the phon
 **Sources of the mapping**
 
 - Live, read-only navigation of a Tiguan Life 1.5 l eHybrid on VW app 4.3.2 (2026-10-02, 2026-10-04, 2026-10-06) and on
-  **4.6.4** (2026-10-07 to 2026-10-11). Captures are mostly navigation; some fixtures record settings edits made in the app (see each `sources.json`).
+  **4.6.4** (2026-10-07 to 2026-10-11) and **4.8.1** (2026-10-16 and 2026-10-17: every read, then each command once
+  on the car with a read-back, put back afterwards). Captures are mostly navigation; some fixtures record settings edits made in the app (see each `sources.json`).
 - Every dump attached to upstream issue #968 (@WEZANGO CUPRA Born; @kgroshert e-up! and ID.4, German; @plainmad Mk8 Golf GTE
   on imperial units) and the context of #1684.
 - String keys from the installed APK's `resources.arsc`; behaviour (what is sent, when, the models) from the APK's decompiled
   code. APKs and decompiled code are **not** distributed. VW 4.3.2 base APK SHA-256
   `81a3719746dfc7c3ac035afb1cac23b08a24155d7dd910a87432a6d60bdaa7b1`; 4.6.4 base APK SHA-256
-  `0278120a011d61d8937f472c5757eaa447bcffc2518512f25f7b38cde7e02916`.
+  `0278120a011d61d8937f472c5757eaa447bcffc2518512f25f7b38cde7e02916`; 4.8.1 base APK SHA-256
+  `5c8943f79f97335b1e2afd4af51adc5ee42894c3a4e984d9e9b9c37c566ef082`.
 - The prior art of @ckomma ([charge-app-connector-vw](https://github.com/ckomma/charge-app-connector-vw)) for the app's
   accessibility vocabulary.
 
