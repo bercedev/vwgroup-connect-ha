@@ -48,6 +48,21 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ### Behoben / Fixed
 
+- **A portal feed that has stopped no longer overrides your polling interval.**
+  For a car with the EU Data Act portal armed, the integration aligns its next
+  poll to the portal's own delivery cadence — a snapshot a minute late is worth
+  catching a minute later rather than a whole interval later. That retry had no
+  limit, so on a feed that had stopped delivering it fired on every poll: the
+  expected drop stayed permanently overdue and the cadence stuck at the
+  three-minute lower bound for as long as the outage lasted, whatever interval
+  you had configured. The retry now gets a budget of three polls, after which
+  your configured interval applies again, and the first snapshot that actually
+  lands restores the alignment. @indigomejor measured this on an Octavia:
+  ten minutes configured, a flat 3.4-minute cadence across three days, roughly
+  seventeen polls an hour, ending in a rate-limit lockout — and raising the
+  interval could not help, because the interval was only ever the upper bound
+  ([#1850](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1850)).
+
 - **A Škoda account no longer gets rate-limited by this integration's own
   retrying.** @indigomejor measured an account-level lockout and handed over
   what it took to find the cause: roughly 176 requests an hour, an HTTP 429 and
