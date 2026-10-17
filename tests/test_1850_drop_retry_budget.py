@@ -26,6 +26,7 @@ from custom_components.vag_connect.coordinator import (
     _DROP_BUFFER_S,
     _DROP_RETRY_MAX_STREAK,
     _DROP_RETRY_S,
+    _drop_anchor_advanced,
     _drop_anchored_sleep_s,
     _drop_overdue,
 )
@@ -113,6 +114,44 @@ def test_overdue_is_the_same_condition_the_sleep_branches_on() -> None:
     assert _sleep(_HIS_INTERVAL + _DROP_BUFFER_S + 1, streak=99) == float(_HIS_INTERVAL)
 
 
+def test_a_frozen_feed_does_not_look_like_a_fresh_drop_every_poll() -> None:
+    """The flaw that made the first version of this fix do nothing at all.
+
+    The loop does not keep the car's own `last_seen_at`. It rebuilds the anchor
+    as `now - capture_age`, and the `now` it subtracts from is a different
+    `datetime.now()` call than the one inside the age helper — so a feed that is
+    completely frozen still produces a slightly different anchor on every poll.
+    Measured on a frozen capture: four distinct values across five polls,
+    differing by two to three MICROSECONDS.
+
+    With an equality test, every one of those read as a new drop, the streak
+    reset on every poll, the budget was never spent, and the cadence stayed
+    pinned at the floor exactly as before the fix. The values below are the
+    real measured ones.
+    """
+    base = datetime(2026, 10, 12, 9, 19, 35, 999994, tzinfo=timezone.utc)
+    jittered = [
+        base,
+        base.replace(microsecond=999997),
+        base.replace(microsecond=999999),
+        base.replace(microsecond=999999),
+        base.replace(microsecond=999998),
+    ]
+    # Consecutive polls on a frozen feed: none of these counts as a new drop,
+    # including the one that jitters BACKWARDS.
+    for prev, cur in zip(jittered, jittered[1:]):
+        assert _drop_anchor_advanced(prev, cur) is False, (prev, cur)
+
+    # A real drop lands minutes later and does count.
+    assert _drop_anchor_advanced(base, base + timedelta(minutes=15)) is True
+    # The first anchor of an entry's life counts, so the budget starts full.
+    assert _drop_anchor_advanced(None, base) is True
+    # No capture at all is not a drop.
+    assert _drop_anchor_advanced(base, None) is False
+    # Backwards never refills the budget.
+    assert _drop_anchor_advanced(base, base - timedelta(minutes=15)) is False
+
+
 def test_the_poll_loop_actually_feeds_the_streak_in() -> None:
     """A wiring pin, and it says so: the budget lives on the coordinator while
     the decision lives in the scheduler, so the two have to be connected. The
@@ -141,6 +180,6 @@ def test_the_poll_loop_actually_feeds_the_streak_in() -> None:
     reset = next(i for i, ln in enumerate(lines)
                  if "self._drop_overdue_streak = 0" in ln and i > 2000)
     window = [ln.strip() for ln in lines[reset - 2:reset + 6]]
-    assert any("!= self._drop_anchor_seen" in ln for ln in window), window
+    assert any("_drop_anchor_advanced(" in ln for ln in window), window
     assert any("self._drop_overdue_streak += 1" in ln for ln in window), window
     assert any("_drop_overdue(" in ln for ln in window), window

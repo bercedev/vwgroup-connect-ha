@@ -280,6 +280,37 @@ _DROP_RETRY_S = 60
 _DROP_RETRY_MAX_STREAK = 3
 
 
+# How far the capture anchor must move forward to count as a drop having landed.
+#
+# It cannot be an equality test. The poll loop does not keep the car's own
+# ``last_seen_at``; it rebuilds the anchor as ``now - capture_age``, and the
+# ``now`` it subtracts from is a different ``datetime.now()`` call than the one
+# inside the age helper. So a feed that is completely frozen still yields a
+# slightly different anchor on every poll — measured at a few microseconds — and
+# an ``!=`` comparison reads every one of those as a fresh drop. That reset the
+# streak on every poll, which left the budget below permanently unspent and the
+# cadence pinned at the floor exactly as before. One second is orders of
+# magnitude above that jitter and orders of magnitude below a real drop, which
+# arrives on the portal's ~15-minute cadence.
+_DROP_ANCHOR_ADVANCE_S = 1.0
+
+
+def _drop_anchor_advanced(
+    previous: datetime | None, current: datetime | None,
+) -> bool:
+    """True when the capture anchor moved forward enough to be a new snapshot.
+
+    Deliberately one-directional: an anchor that goes *backwards* (a corrected
+    clock, a car leaving the entry and taking the freshest capture with it) is
+    not a drop, so it must not refill the retry budget.
+    """
+    if current is None:
+        return False
+    if previous is None:
+        return True
+    return (current - previous).total_seconds() > _DROP_ANCHOR_ADVANCE_S
+
+
 def _drop_overdue(
     interval_s: int, newest_capture_at: datetime | None, now: datetime,
 ) -> bool:
@@ -4603,7 +4634,15 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             # the feed stays down. A capture time we have not decided against
             # before means a drop landed: alignment is working, start over.
             _decision_now = datetime.now(tz=timezone.utc)
-            if _cap_anchor is not None and _cap_anchor != self._drop_anchor_seen:
+            # getattr with defaults, like `_newest_capture_at` above and the
+            # rest of this loop: several tests drive the loop body on a
+            # coordinator that never ran __init__, and an unconditional
+            # attribute read here raises AttributeError for them. The previous
+            # revision of this block happened to survive that only because its
+            # `and` short-circuited before touching the attribute.
+            _prev_anchor = getattr(self, "_drop_anchor_seen", None)
+            self._drop_overdue_streak = getattr(self, "_drop_overdue_streak", 0)
+            if _drop_anchor_advanced(_prev_anchor, _cap_anchor):
                 self._drop_overdue_streak = 0
             elif _drop_overdue(interval_s, _cap_anchor, _decision_now):
                 self._drop_overdue_streak += 1
