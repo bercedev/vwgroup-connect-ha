@@ -48,6 +48,24 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ### Behoben / Fixed
 
+- **The volkswagen.de sign-in works again on accounts that get an e-mail
+  code.** The advertising opt-in VW put in front of the login was already being
+  declined, but only on the two paths that reach it before the code is
+  entered. On an account that uses a code, that is never the case: the sign-in
+  stops at the challenge page to collect the code, and the opt-in appears only
+  after it is submitted — so for exactly the people reporting this, the fix in
+  5.0.0 could not run. Entering a correct code ended with "login did not
+  complete" and asking for a new one could not help, because the next one
+  landed on the same page. The code step now declines the opt-in as the other
+  two do, and it does so before judging the landing, which also covers the
+  opt-in being served with an error status. @nuggie found the cause on 5.0.0
+  and posted the log line that proves it — a sign-in chain ending at
+  `consent.vwgroup.io` after the code POST, which only exists to be read
+  because the same report round added logging to that step. @Fishermanjb
+  reported it first and supplied the original logs, and @Ra72xx hit it
+  independently on a second account and confirmed the workaround of declining
+  the opt-in once in a browser
+  ([#1827](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1827)).
 - **A Škoda account no longer gets rate-limited by this integration's own
   retrying.** @indigomejor measured an account-level lockout and handed over
   what it took to find the cause: roughly 176 requests an hour, an HTTP 429 and
