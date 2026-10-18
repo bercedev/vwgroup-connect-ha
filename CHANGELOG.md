@@ -46,6 +46,38 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Hinzugefügt / Added
+
+- **Six more readings from the EU Data Act feed: climate humidity and power
+  draw, two battery states, the battery's own warning field, and the outside
+  temperature sensor's health.** @Massen88's ID.4 Pro reported all six, and the
+  report is what made them usable rather than merely visible: the official
+  dictionary this integration ships already lists all six, but with **no unit
+  and no type** — the car supplied the units VW left out (`Unit_PerCent`,
+  `Unit_Watt`). Two of the new readings are real measurements, the humidity at
+  the climate sensor and what heating and cooling are drawing in watts, which on
+  an electric car is range you can watch. The other four are states, and all six
+  arrive as diagnostics, switched off by default, on the portal cars whose feed
+  carries them.
+
+  Two were traps worth describing, because both are documented by VW's own
+  catalogue and neither is obvious from the name. The battery's
+  "charging active" signal **latches**: it stays active after the ignition goes
+  on until the standstill flag clears, so it reads active while the car is
+  merely switched on. It is therefore published as a raw signal and deliberately
+  never becomes the charging state your automations use — that still comes from
+  the brand channels. And the leaf whose name reads like an outside temperature
+  is the outside temperature sensor's *fault status*; it is published as a
+  status, and it is genuinely useful, because it says whether the outside
+  temperature this integration already shows you can be trusted.
+
+  The humidity reading is named after its source rather than a place: the
+  catalogue says only "measured relative humidity", and while the signal's
+  prefix and its sensor module both point at a cabin sensor, nothing available
+  here proves cabin against intake air. It is kept separate from the existing
+  outside-humidity reading, which comes off a different channel entirely, so a
+  car reporting both will settle it ([#1863](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1863)).
+
 ### Geändert / Changed
 
 - **The volkswagen.de HTTP/2 channel now uses Home Assistant's own SSL context
@@ -177,6 +209,66 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   @tp9csmv79n-code found the cause and verified the fix before filing
   ([#1853](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1853)).
 
+- **The "Unknown user" notice now only says that when the login actually answered it.**
+  `17eab6f9` (#1809) stopped the repair notice and the setup abort from calling a backend
+  refusal "an MEB / ID-family car" — an Audi e-tron 55 quattro, a GE-platform car from 2019,
+  had been told it was an ID.3/ID.4/Enyaq/Born/Q4. What replaced that claim was narrower and
+  checkable: "the durable Car-Net login answered Unknown user for this car". The rule deciding
+  when to say that was left exactly as it was, and on that rule the sentence reaches people
+  whose login never answered it. A bare `invalid_grant` — the generic OAuth2 rejection, also
+  produced by an audience mismatch (#464) and by a refused register — was read as the same
+  verdict, and the entry's *other* write site flagged it on ANY mint failure at all, a 5xx or a
+  timeout included. The one field that would have told the two apart, `error_description`,
+  carries the actual "Unknown user" text, but the #1355 redaction dropped it before the setup
+  flow ever saw it, so even a true claim could not have been substantiated. Measured live
+  against an Audi e-tron 50 quattro, MY2022 — MLB-evo, not MEB: `HTTP 400`, `error=invalid_grant`,
+  `error_description="Unknown user <account-uuid>"`. The description is now carried on the
+  exception as an attribute (never in its message — it embeds an account UUID), and a new
+  classifier decides on it: only a confirmed "Unknown user" keeps the Car-Net wording, and
+  everything else — a 5xx, a timeout, an audience mismatch, an `unauthorized_client` — gets its
+  own notice that says the cause is undetermined rather than guessing one. Ten of the twelve shipped languages still carried the pre-`17eab6f9` "this is an
+  ID/MEB model" wording in this same notice and in the setup abort — `en` and `de` were fixed,
+  the other ten were not caught by the translation-parity test because the keys still existed,
+  just with the old text — so this PR carries the correction and the new notice to all of
+  them. Setting up the EU Data Act portal with MBB commands no longer loses the portal when the
+  command channel fails for any other reason: every mint failure now keeps the read-only
+  portal entry with the reason recorded, a refusal already at register is classified like one
+  at the token exchange, a Reconfigure no longer carries an earlier verdict into the next
+  attempt, and the previous notice is taken down when the reason changes. Measured on, and the
+  fix contributed by, @woifh's own Audi e-tron.
+
+- **A sign-in Volkswagen has walled off no longer costs up to eight rejected attempts and a
+  wrong explanation.** On VW EU and Audi the primary login reaches the very last step — right page,
+  right POST, `authenticated`, authorization code in hand — and then the exchange of that code
+  for a token is refused with `400 invalid assertion headers`. Nothing about the account is
+  wrong, but the integration treated it as one more rejection to retry: it walked the whole
+  `client_id × qmauth` candidate chain — **eight rejected sign-ins per login on VW EU** (four
+  client ids × two qmauth secrets; the log in #1712 shows attempts #0–#6 moving on, then the
+  last one failing) **and six on Audi** (three × two), and a refresh that fails falls back to a
+  login — and ended on "all candidates exhausted" — a message that reads
+  like a credentials problem, which is what sent people re-entering a password that was already
+  correct. It now stops once every qmauth secret has drawn that answer (two attempts on either
+  brand;
+  one refused secret alone does not stop it, because the chain keeps the prior pair for VW
+  re-rotations), and only for Audi and VW, the brands that sign those headers. This is the same
+  wall as #1165 on VW North America, which has failed fast with its own honest error since
+  July; the European side simply had no equivalent, so it now gets one — in the config flow,
+  and also at setup and on re-login, where the read-only portal fallback used to hide it: if
+  the portal fails too, the entry now stops with this reason and its own repair notice instead
+  of "invalid credentials". (It already stopped there before rather than retrying, because
+  "invalid credentials" is a hard setup reason too; what changes is what it tells you.) Why
+  retrying cannot help was settled against the shipping app rather than assumed: myAudi 5.8.1 carries no
+  `qmauth` symbol in any of its six DEX files or its native libraries, nor the HMAC secret the
+  integration signs `x-qmauth` with, while it does carry the Play Integrity client
+  (`StandardIntegrityManager`, `requestIntegrityToken`) and still sends `x-assertion`. The app
+  has moved from the HMAC scheme to a Google-signed attestation bound to VW's package and
+  signing certificate, which no open-source client can mint — so there is no candidate left for
+  the chain to find. That also answers the question #1712 left open, and not in the hoped-for
+  direction: the credentials have not merely rotated. What changes for you is honesty and cost,
+  not access — the primary login stays blocked, vehicle data keeps flowing through the
+  read-only EU Data Act portal where that works for your car, and where it does not, the
+  integration now says so in every shipped language instead of blaming your password. Measured on an Audi e-tron 50 quattro, MY2022, and
+  contributed by @woifh (#1712).
 
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
 
