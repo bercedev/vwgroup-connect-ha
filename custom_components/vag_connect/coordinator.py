@@ -260,10 +260,75 @@ def _portal_health(
 # slower than the user's configured interval.
 _DROP_BUFFER_S = 60
 _DROP_RETRY_S = 60
+# #1850 — how many consecutive overdue polls the fast retry is worth.
+#
+# The retry above is for a drop that is LATE: polling again in a minute catches
+# a snapshot that is about to land, which is the whole point of aligning. It is
+# not for a drop that is NOT COMING. On an entry whose portal feed has stopped,
+# every poll finds the anchor unmoved, so the "overdue" branch fires forever and
+# the clamp pins the cadence at the floor — for as long as the feed stays down,
+# regardless of what the user configured. @indigomejor measured that: a
+# ``scan_interval`` of 10 minutes polling every 3.4 minutes for three days,
+# ~17/hour, ending in an account-level lockout. Raising the interval could not
+# help, because the interval was only ever the upper bound.
+#
+# So the fast retry gets a budget. After this many consecutive overdue polls
+# with no fresh capture, the configured interval is handed back; the first drop
+# that actually lands resets the budget and alignment resumes. Three keeps the
+# behaviour the alignment exists for (a drop one or two polls late is still
+# caught quickly) and drops the behaviour nobody asked for.
+_DROP_RETRY_MAX_STREAK = 3
+
+
+# How far the capture anchor must move forward to count as a drop having landed.
+#
+# It cannot be an equality test. The poll loop does not keep the car's own
+# ``last_seen_at``; it rebuilds the anchor as ``now - capture_age``, and the
+# ``now`` it subtracts from is a different ``datetime.now()`` call than the one
+# inside the age helper. So a feed that is completely frozen still yields a
+# slightly different anchor on every poll — measured at a few microseconds — and
+# an ``!=`` comparison reads every one of those as a fresh drop. That reset the
+# streak on every poll, which left the budget below permanently unspent and the
+# cadence pinned at the floor exactly as before. One second is orders of
+# magnitude above that jitter and orders of magnitude below a real drop, which
+# arrives on the portal's ~15-minute cadence.
+_DROP_ANCHOR_ADVANCE_S = 1.0
+
+
+def _drop_anchor_advanced(
+    previous: datetime | None, current: datetime | None,
+) -> bool:
+    """True when the capture anchor moved forward enough to be a new snapshot.
+
+    Deliberately one-directional: an anchor that goes *backwards* (a corrected
+    clock, a car leaving the entry and taking the freshest capture with it) is
+    not a drop, so it must not refill the retry budget.
+    """
+    if current is None:
+        return False
+    if previous is None:
+        return True
+    return (current - previous).total_seconds() > _DROP_ANCHOR_ADVANCE_S
+
+
+def _drop_overdue(
+    interval_s: int, newest_capture_at: datetime | None, now: datetime,
+) -> bool:
+    """True when the next portal drop is already later than expected.
+
+    Shared by the scheduler and its caller so the streak is counted against the
+    same condition the sleep is computed from, rather than against a second copy
+    of the arithmetic that could drift away from it.
+    """
+    if newest_capture_at is None:
+        return False
+    target = newest_capture_at + timedelta(seconds=interval_s + _DROP_BUFFER_S)
+    return (target - now).total_seconds() <= 0
 
 
 def _drop_anchored_sleep_s(
     interval_s: int, newest_capture_at: datetime | None, now: datetime, floor_s: int,
+    overdue_streak: int = 0,
 ) -> float:
     """Seconds to sleep until the next expected portal drop.
 
@@ -271,13 +336,26 @@ def _drop_anchored_sleep_s(
     (``<= now``) collapses to a short retry. The result is clamped to
     ``[floor_s, interval_s]`` so alignment can never poll faster than the floor
     nor slower than the configured interval. With no capture time it is a no-op
-    (returns ``interval_s``)."""
+    (returns ``interval_s``).
+
+    ``overdue_streak`` is how many consecutive polls have found the drop overdue
+    without a fresh capture arriving. Once it reaches
+    ``_DROP_RETRY_MAX_STREAK`` the fast retry has stopped paying for itself and
+    the configured interval is returned instead — see that constant for why.
+    """
     if newest_capture_at is None:
         return float(interval_s)
-    target = newest_capture_at + timedelta(seconds=interval_s + _DROP_BUFFER_S)
-    remaining = (target - now).total_seconds()
-    if remaining <= 0:
+    if _drop_overdue(interval_s, newest_capture_at, now):
+        if overdue_streak >= _DROP_RETRY_MAX_STREAK:
+            # Through the same clamp as every other path: an early return of a
+            # bare ``interval_s`` would hand back a sleep BELOW ``floor_s``
+            # whenever the configured interval is shorter than the floor, which
+            # is the one promise this function's docstring makes.
+            return max(float(floor_s), float(interval_s))
         remaining = float(_DROP_RETRY_S)  # drop overdue → poll again soon
+    else:
+        target = newest_capture_at + timedelta(seconds=interval_s + _DROP_BUFFER_S)
+        remaining = (target - now).total_seconds()
     return max(float(floor_s), min(remaining, float(interval_s)))
 
 
@@ -1307,6 +1385,12 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         # Drop-anchored scheduling — the freshest snapshot capture time seen so
         # far, used to align the next portal poll to the ~15-min drop cadence.
         self._newest_capture_at: datetime | None = None
+        # #1850 — consecutive overdue polls with no fresh capture, and the anchor
+        # the last decision was taken against. Together they stop the fast
+        # drop-retry from pinning the cadence at the floor on a feed that has
+        # stopped delivering; see _DROP_RETRY_MAX_STREAK.
+        self._drop_overdue_streak = 0
+        self._drop_anchor_seen: datetime | None = None
         # Consecutive EU-DA portal 5xx outages → escalating poll backoff (5/15/30m).
         self._consecutive_portal_5xx = 0
 
@@ -4576,12 +4660,38 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 self._cariad_client, "_supplementary_eu_portal", None
             )
             _cap_anchor = getattr(self, "_newest_capture_at", None)
+            # #1850 — count consecutive overdue polls, so the fast retry gets a
+            # budget instead of pinning the cadence at the floor for as long as
+            # the feed stays down. A capture time we have not decided against
+            # before means a drop landed: alignment is working, start over.
+            _decision_now = datetime.now(tz=timezone.utc)
+            # getattr with defaults, like `_newest_capture_at` above and the
+            # rest of this loop: several tests drive the loop body on a
+            # coordinator that never ran __init__, and an unconditional
+            # attribute read here raises AttributeError for them. The previous
+            # revision of this block happened to survive that only because its
+            # `and` short-circuited before touching the attribute.
+            _prev_anchor = getattr(self, "_drop_anchor_seen", None)
+            self._drop_overdue_streak = getattr(self, "_drop_overdue_streak", 0)
+            if _drop_anchor_advanced(_prev_anchor, _cap_anchor):
+                self._drop_overdue_streak = 0
+            elif _drop_overdue(interval_s, _cap_anchor, _decision_now):
+                self._drop_overdue_streak += 1
+                if self._drop_overdue_streak == _DROP_RETRY_MAX_STREAK:
+                    _LOGGER.debug(
+                        "EU Data Act portal: %d polls with no fresh snapshot — "
+                        "standing down from the %ds drop-retry to the configured "
+                        "%ds until one lands (#1850)",
+                        self._drop_overdue_streak, _DROP_RETRY_S, interval_s,
+                    )
+            self._drop_anchor_seen = _cap_anchor
             if not nightly and _portal is not None and _cap_anchor is not None:
                 sleep_s: float = _drop_anchored_sleep_s(
                     interval_s,
                     _cap_anchor,
-                    datetime.now(tz=timezone.utc),
+                    _decision_now,
                     _CC_MIN_INTERVAL_S,
+                    self._drop_overdue_streak,
                 )
             else:
                 sleep_s = float(interval_s)
