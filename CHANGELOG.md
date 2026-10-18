@@ -101,6 +101,36 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ### Behoben / Fixed
 
+- **When the manufacturer says "too many requests, wait N seconds", the
+  integration now waits instead of asking three more times.** A throttled
+  request was retried after 5, 10 and 20 seconds before the account-level pause
+  engaged — three further requests at the exact moment the backend had said to
+  stop — and the `Retry-After` header it sends with that refusal was not read on
+  this path at all, so the pause that followed was a flat 30 minutes rather than
+  the time actually asked for, which can be wrong in either direction. With the
+  header present there is nothing left to find out by asking again: the retries
+  are skipped and the client holds for what was requested, with a floor so a
+  one-second value cannot become a loop and a ceiling at the half hour this
+  kind of refusal already held for, so no header can stall things for longer
+  than they could be stalled before. A backend asking for more than that is
+  not waited out in full on purpose: resuming after half an hour now sends one
+  request rather than four, and if that one is refused the refusal is honoured
+  in turn. A refusal that carries no
+  such instruction behaves exactly as before, because that one can still be a
+  momentary burst.
+
+  Two smaller things in the same place. The remaining-request-budget headers
+  were being discarded on precisely the two responses that are *about* the
+  budget, so someone sending diagnostics after a lockout could not show us
+  their quota; they are now kept. And the pause is logged with the number that
+  produced it.
+
+  @indigomejor found this in his own lockout log and said what was wrong with
+  it, after the first half of this issue was already fixed: the lockout came
+  back at a *lower* request rate with no second client on the account, which
+  ruled out the explanation everyone including me was leaning on and pointed
+  here instead ([#1850](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1850)).
+
 - **A portal feed that has stopped no longer overrides your polling interval.**
   For a car with the EU Data Act portal armed, the integration aligns its next
   poll to the portal's own delivery cadence — a snapshot a minute late is worth
