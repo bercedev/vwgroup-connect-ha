@@ -1766,6 +1766,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Durata sensore di pressione posteriore destro"
+      },
+      "climate_humidity_pct": {
+        "name": "Umidità sensore clima"
+      },
+      "climate_power_w": {
+        "name": "Potenza climatizzazione"
+      },
+      "hv_dc_charging_profile": {
+        "name": "Profilo di carica CC"
+      },
+      "hv_battery_warning": {
+        "name": "Avviso batteria AT"
+      },
+      "hv_charging_signal_active": {
+        "name": "Segnale di carica AT"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Stato sensore temperatura esterna"
       }
     },
     "binary_sensor": {
