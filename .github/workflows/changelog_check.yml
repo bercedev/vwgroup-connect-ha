@@ -43,3 +43,22 @@ jobs:
             exit 1
           fi
           echo "CHANGELOG.md wurde aktualisiert — OK"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      # The step above asks whether CHANGELOG.md was *touched*. That is a
+      # different question from whether the result is intact, and twice in one
+      # day the difference cost an entry: a merge left "### Behoben / Fixed" in
+      # the Unreleased block twice, and a conflict resolution dropped main's
+      # whole "### Hinzugefügt / Added" section. Both times the file WAS
+      # modified, so the step above passed it.
+      #
+      # --base origin/main compares against main's current changelog, and on a
+      # pull_request event actions/checkout gives us the MERGE commit — so what
+      # is compared is the merged result, which is where both failures showed up.
+      # The script refuses (exit 2) if that ref cannot be read, rather than
+      # quietly dropping the lost-entry check in a job nobody reads when it passes.
+      - name: CHANGELOG-Struktur prüfen (Dubletten, Marker, verlorene Einträge)
+        run: python scripts/check_changelog_structure.py --base origin/main

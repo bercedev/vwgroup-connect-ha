@@ -55,6 +55,36 @@ workflow enforces this.
 - short description of the change
 ```
 
+### Add the entry with the script, not with a block rewrite
+
+```bash
+python scripts/add_changelog_entry.py --section fixed --text-file entry.md
+python scripts/add_changelog_entry.py --section added --dry-run --text "- **…**"
+```
+
+`add_changelog_entry.py` inserts one entry at the end of its section and
+touches nothing else — it refuses to write if a single existing line would be
+removed or altered. That matters because of how the block is *usually* edited:
+rewriting the whole `[Unreleased]` block makes git see one large change on each
+branch instead of two small additions in different places, so two branches
+overlap and resolving the conflict means one side's entries go with it. Twice in
+one day that nearly cost an entry — once a duplicated `### Behoben / Fixed`
+heading left by a merge, once main's whole `### Hinzugefügt / Added` section
+dropped by a side-pick. Inserting per section merges cleanly in that case
+(measured); the same section still conflicts, but over two lines whose union is
+obviously both.
+
+`check_changelog_structure.py` is the net under it, and runs on every pull
+request in `changelog_check.yml`. It refuses a file with a conflict marker, a
+duplicate `###` heading inside `[Unreleased]`, or an entry that exists in
+`origin/main` and has vanished. It deliberately does **not** check section order
+or vocabulary — this file has used 31 distinct headings and keeps past entries
+as written. Run it by hand the same way CI does:
+
+```bash
+python scripts/check_changelog_structure.py --base origin/main
+```
+
 ## Language convention (v2.4.1+ — EN-primary, switched 2026-05-23)
 
 CHANGELOG entries + release notes + GH release titles use **English as
