@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Durée de vie capteur de pression arrière droit"
+      },
+      "climate_humidity_pct": {
+        "name": "Humidité capteur de climatisation"
+      },
+      "climate_power_w": {
+        "name": "Puissance climatisation"
+      },
+      "hv_dc_charging_profile": {
+        "name": "Profil de charge CC"
+      },
+      "hv_battery_warning": {
+        "name": "Alerte batterie HT"
+      },
+      "hv_charging_signal_active": {
+        "name": "Signal de charge HT"
+      },
+      "outside_temp_sensor_status": {
+        "name": "État capteur de température extérieure"
       }
     },
     "binary_sensor": {

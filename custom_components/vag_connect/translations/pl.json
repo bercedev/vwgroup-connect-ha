@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Żywotność czujnika ciśnienia tył prawy"
+      },
+      "climate_humidity_pct": {
+        "name": "Wilgotność czujnika klimatyzacji"
+      },
+      "climate_power_w": {
+        "name": "Moc klimatyzacji"
+      },
+      "hv_dc_charging_profile": {
+        "name": "Profil ładowania DC"
+      },
+      "hv_battery_warning": {
+        "name": "Ostrzeżenie akumulatora WN"
+      },
+      "hv_charging_signal_active": {
+        "name": "Sygnał ładowania WN"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Stan czujnika temperatury zewnętrznej"
       }
     },
     "binary_sensor": {

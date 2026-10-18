@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Levensduur druksensor rechtsachter"
+      },
+      "climate_humidity_pct": {
+        "name": "Luchtvochtigheid klimaatsensor"
+      },
+      "climate_power_w": {
+        "name": "Klimaatvermogen"
+      },
+      "hv_dc_charging_profile": {
+        "name": "DC-laadprofiel"
+      },
+      "hv_battery_warning": {
+        "name": "Waarschuwing HV-accu"
+      },
+      "hv_charging_signal_active": {
+        "name": "HV-laadsignaal"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Status buitentemperatuursensor"
       }
     },
     "binary_sensor": {

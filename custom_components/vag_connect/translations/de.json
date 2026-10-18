@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Reifensensor-Restlaufzeit hinten rechts"
+      },
+      "climate_humidity_pct": {
+        "name": "Luftfeuchte Klimasensor"
+      },
+      "climate_power_w": {
+        "name": "Klimaleistung"
+      },
+      "hv_dc_charging_profile": {
+        "name": "DC-Ladeprofil"
+      },
+      "hv_battery_warning": {
+        "name": "Warnung Antriebsbatterie"
+      },
+      "hv_charging_signal_active": {
+        "name": "Ladesignal Antriebsbatterie"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Status Außentemperaturfühler"
       }
     },
     "binary_sensor": {
