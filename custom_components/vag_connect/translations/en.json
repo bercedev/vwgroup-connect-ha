@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Tyre sensor life rear-right"
+      },
+      "climate_humidity_pct": {
+        "name": "Climate sensor humidity"
+      },
+      "climate_power_w": {
+        "name": "Climate power draw"
+      },
+      "hv_dc_charging_profile": {
+        "name": "DC charging profile"
+      },
+      "hv_battery_warning": {
+        "name": "HV battery warning"
+      },
+      "hv_charging_signal_active": {
+        "name": "HV charging signal"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Outside temperature sensor status"
       }
     },
     "binary_sensor": {

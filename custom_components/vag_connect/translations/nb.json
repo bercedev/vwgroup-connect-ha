@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Trykksensor levetid bak høyre"
+      },
+      "climate_humidity_pct": {
+        "name": "Luftfuktighet klimasensor"
+      },
+      "climate_power_w": {
+        "name": "Klimaeffekt"
+      },
+      "hv_dc_charging_profile": {
+        "name": "DC-ladeprofil"
+      },
+      "hv_battery_warning": {
+        "name": "Advarsel HV-batteri"
+      },
+      "hv_charging_signal_active": {
+        "name": "HV-ladesignal"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Status utetemperaturføler"
       }
     },
     "binary_sensor": {

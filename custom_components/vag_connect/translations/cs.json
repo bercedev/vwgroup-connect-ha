@@ -1767,6 +1767,24 @@
       },
       "tyre_sensor_life_rr": {
         "name": "Životnost snímače tlaku vzadu vpravo"
+      },
+      "climate_humidity_pct": {
+        "name": "Vlhkost snímače klimatizace"
+      },
+      "climate_power_w": {
+        "name": "Výkon klimatizace"
+      },
+      "hv_dc_charging_profile": {
+        "name": "Profil nabíjení DC"
+      },
+      "hv_battery_warning": {
+        "name": "Výstraha HV baterie"
+      },
+      "hv_charging_signal_active": {
+        "name": "Signál nabíjení HV"
+      },
+      "outside_temp_sensor_status": {
+        "name": "Stav snímače venkovní teploty"
       }
     },
     "binary_sensor": {

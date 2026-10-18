@@ -46,6 +46,38 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Hinzugefügt / Added
+
+- **Six more readings from the EU Data Act feed: climate humidity and power
+  draw, two battery states, the battery's own warning field, and the outside
+  temperature sensor's health.** @Massen88's ID.4 Pro reported all six, and the
+  report is what made them usable rather than merely visible: the official
+  dictionary this integration ships already lists all six, but with **no unit
+  and no type** — the car supplied the units VW left out (`Unit_PerCent`,
+  `Unit_Watt`). Two of the new readings are real measurements, the humidity at
+  the climate sensor and what heating and cooling are drawing in watts, which on
+  an electric car is range you can watch. The other four are states, and all six
+  arrive as diagnostics, switched off by default, on the portal cars whose feed
+  carries them.
+
+  Two were traps worth describing, because both are documented by VW's own
+  catalogue and neither is obvious from the name. The battery's
+  "charging active" signal **latches**: it stays active after the ignition goes
+  on until the standstill flag clears, so it reads active while the car is
+  merely switched on. It is therefore published as a raw signal and deliberately
+  never becomes the charging state your automations use — that still comes from
+  the brand channels. And the leaf whose name reads like an outside temperature
+  is the outside temperature sensor's *fault status*; it is published as a
+  status, and it is genuinely useful, because it says whether the outside
+  temperature this integration already shows you can be trusted.
+
+  The humidity reading is named after its source rather than a place: the
+  catalogue says only "measured relative humidity", and while the signal's
+  prefix and its sensor module both point at a cabin sensor, nothing available
+  here proves cabin against intake air. It is kept separate from the existing
+  outside-humidity reading, which comes off a different channel entirely, so a
+  car reporting both will settle it ([#1863](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1863)).
+
 ### Geändert / Changed
 
 - **The volkswagen.de HTTP/2 channel now uses Home Assistant's own SSL context
