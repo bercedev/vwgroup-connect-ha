@@ -20,17 +20,36 @@ v2.0.0 (Big-Bang):
   the integration.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 import logging
 
 
-# RepairsFlowResult, not the bare FlowResult: HA 2026.10 parameterised
-# RepairsFlow as FlowHandler[RepairsFlowContext, RepairsFlowResult, str], so a
-# step annotated with the unparameterised result no longer matches what
-# async_show_form returns here. The name goes back to at least 2026.9, so this
-# is the annotation both versions agree on.
-from homeassistant.components.repairs import RepairsFlow, RepairsFlowResult
+from homeassistant.components.repairs import RepairsFlow
+
+if TYPE_CHECKING:
+    # RepairsFlowResult, not the bare FlowResult: HA 2026.10 parameterised
+    # RepairsFlow as FlowHandler[RepairsFlowContext, RepairsFlowResult, str],
+    # so a step annotated with the unparameterised result no longer matches
+    # what async_show_form returns here.
+    #
+    # TYPE_CHECKING-only, because the name is exported only from HA 2026.6.0
+    # (@thomascombe measured it absent in 2026.4.3 and 2026.5.0) while every
+    # use of it in this file is a ``-> RepairsFlowResult`` return annotation.
+    # Imported at runtime it took the whole integration down on every older
+    # core (#1858): HA loads this module as soon as the integration sets up,
+    # so the ImportError surfaced as "failed to set up" with a traceback that
+    # named repairs instead of the version gap — and hacs.json was advertising
+    # 2024.4.0, so HACS offered the update to exactly the installations it
+    # would break.
+    #
+    # Needs ``from __future__ import annotations`` above to be enough: cores
+    # before 2026.10 run Python 3.13, which evaluates return annotations at
+    # function definition, so the guard alone would trade the ImportError for
+    # a NameError. 3.14 defers them (PEP 649) and would not need it.
+    from homeassistant.components.repairs import RepairsFlowResult
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.issue_registry as ir
 from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
@@ -139,6 +158,12 @@ def raise_issue_auth_required(
             ir.IssueSeverity.ERROR,
             "device_login_expired",
         ),
+        # #1712 — the sign-in worked, the token exchange is refused. Not a
+        # password problem, so it must not borrow the invalid_credentials copy.
+        "eu_signin_attestation": (
+            ir.IssueSeverity.ERROR,
+            "eu_signin_attestation",
+        ),
         # #1813 follow-up — same entry shape, but on a brand whose app
         # device-code client was retired, so the QR step above is a dead end
         # and the way back in is reconfigure with email + password.
@@ -210,7 +235,8 @@ def clear_auth_issues(hass: HomeAssistant, entry_id: str) -> None:
                    "marketing_consent", "too_many_requests",
                    "invalid_credentials", "auth_failed",
                    "device_login_expired", "device_login_grant_retired",
-                   "portal_interaction_required"]:
+                   "portal_interaction_required",
+                   "eu_signin_attestation"]:
         ir.async_delete_issue(hass, DOMAIN, f"{entry_id}_{reason}")
 
 

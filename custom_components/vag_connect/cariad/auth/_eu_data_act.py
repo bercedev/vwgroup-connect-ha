@@ -46,7 +46,11 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 from aiohttp import ClientConnectionError, ClientSession, ClientTimeout
 
-from .._util import drop_charge_sentinel, drop_odometer_sentinel
+from .._util import (
+    drop_charge_sentinel,
+    drop_odometer_sentinel,
+    is_https_on_domains,
+)
 from ..exceptions import (
     AuthenticationError,
     CariadError,
@@ -2982,6 +2986,40 @@ def map_dataset_to_vehicle_data(
     _blow = _lead_float(_sig("KL_Geblspng_Soll_XIX_Klima_12_XIX_E3V_VLAN_Connect"))
     if _blow is not None:
         d.climate_blower_target_v = round(_blow, 1)
+    # Scout #1863 (@Massen88, ID.4 Pro). Each signal gets its OWN consuming
+    # _sig() call, which is not only about reading it: an unconsumed leaf keeps
+    # being reported as new on every poll, so the Scout re-files it. These six
+    # were filed exactly that way.
+    #
+    # "Gesamt-Ist-Leistung fuer Komfort- und Thermomanagement", sampled as
+    # "0.0 Unit_Watt" with the car idle.
+    _kl_pwr = _lead_float(_sig("KL_IstLeistung_XIX_Klima_EV_06_XIX_E3V_VLAN_Connect"))
+    if _kl_pwr is not None and d.climate_power_w is None:
+        d.climate_power_w = round(_kl_pwr, 1)
+    # "gemessene relative Luftfeuchte", sampled as "65.5 Unit_PerCent". Bounded
+    # before it is believed: a relative humidity outside 0-100 is not a reading,
+    # and these portal leaves do ship out-of-range sentinels (the SAC
+    # temperature above is consumed-but-dropped at exactly -40).
+    _kl_hum = _lead_float(
+        _sig("FS_Luftfeuchte_rel_XIX_Klima_Sensor_01_XIX_E3V_VLAN_Connect"))
+    if _kl_hum is not None and 0 <= _kl_hum <= 100 and d.climate_humidity_pct is None:
+        d.climate_humidity_pct = round(_kl_hum, 1)
+    # Three BMS enum strings and one fault status. Stripped because the portal
+    # ships these with a trailing space ("inaktiv ", "iO "), and an empty string
+    # after stripping is absence, not a state.
+    for _sig_name, _attr in (
+        ("BMS_DC_Ladeprofil_XIX_BMS_26_XIX_E3V_VLAN_Connect",
+         "hv_dc_charging_profile"),
+        ("BMS_KundenWarnung_XIX_BMS_07_XIX_E3V_VLAN_Connect",
+         "hv_battery_warning"),
+        ("BMS_Ladevorgang_aktiv_XIX_BMS_24_XIX_E3V_VLAN_Connect",
+         "hv_charging_signal_active"),
+        ("BCM1_FStatus_Aussentemp_ungef_XIX_Klima_Sensor_02_MQB_XIX_E3V_VLAN_Connect",
+         "outside_temp_sensor_status"),
+    ):
+        _raw = _sig(_sig_name)
+        if _raw is not None and getattr(d, _attr) is None:
+            setattr(d, _attr, str(_raw).strip() or None)
     # "Stellt den Status des Ladesteckers hinsichtlich Präsenz zur Verfügung".
     # @dasebi91's car reports "Init" — the uninitialised state, which must NOT be
     # read as "no cable": only an explicit gesteckt/nicht-gesteckt is believed.
@@ -5812,6 +5850,37 @@ class EUDataActConnector:
             )
             return None
         cb_url = urljoin(landing_url, callback)
+        # The callback is named by the page we landed on, i.e. by a remote
+        # party, and we then FETCH it with the login headers attached. Pin it
+        # before following: an absolute ``callback=https://elsewhere/`` would
+        # otherwise send a request from the user's Home Assistant to a host of
+        # someone else's choosing. Both reference implementations the portal
+        # operator points maintainers at validate this target, and the
+        # ioBroker one added exactly this check on 2026-10-08.
+        #
+        # Deliberately generous, because a false refusal is the more likely
+        # harm: it ends the login in MarketingConsentError, and that is certain
+        # where the diversion is hypothetical. Three things are accepted —
+        #   * the host that served the consent page itself. A callback that
+        #     resolves there is not a diversion; we are already talking to it,
+        #     and this is what every RELATIVE callback resolves to.
+        #   * vwgroup.io and its subdomains, which is where the measured
+        #     callbacks point (identity.vwgroup.io/oidc/v1/...) and where the
+        #     brand IDPs live (cupraid, skodaid, audi-id).
+        #   * the portal's own host.
+        # Anything else, and anything not https, falls through to the
+        # classifier exactly as a missing callback already does.
+        _landed_host = urlparse(landing_url).hostname or ""
+        if not is_https_on_domains(
+            cb_url, _landed_host, "vwgroup.io", urlparse(_PORTAL_BASE).hostname or "",
+        ):
+            _LOGGER.debug(
+                "EU Data Act portal: the consent page at %s named an off-domain"
+                " callback target — not following it, leaving the verdict to the"
+                " classifier",
+                _safe_url(landing_url),
+            )
+            return None
         try:
             result = await self._follow_login_redirects(
                 "GET", cb_url, headers=headers,

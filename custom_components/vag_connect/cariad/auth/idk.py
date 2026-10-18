@@ -36,6 +36,7 @@ from ._auth_config_resolver import AuthConfigResolver
 from ..exceptions import (
     AuthenticationError,
     EmailTwoFactorRequiredError,
+    EuropeAttestationError,
     MarketingConsentError,
     NorthAmericaAttestationError,
     TermsAndConditionsError,
@@ -46,7 +47,7 @@ from ..exceptions import (
     UpstreamUnavailableError,
 )
 from ..models import BrandConfig, TokenSet
-from .._util import oauth_error_code
+from .._util import host_in_domains, is_https_on_domains, oauth_error_code
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -105,6 +106,18 @@ def _token_exchange_detail(status: int, body: str) -> str:
     base = f"Token exchange failed HTTP {status} (body {len(body)} chars)"
     return f"{base} — {code}" if code else base
 
+
+# #1712 — the OAuth error the CARIAD BFF token endpoint answers when the
+# assertion headers do not satisfy it. Lower-case because ``oauth_error_code``
+# returns the backend's own casing and this is compared case-insensitively;
+# it is the one SPACED value in the archive (see ``safe_error_token``).
+# Matches the 5-header variant the production path sends (HTTP 400). The
+# attestation watcher (.github/workflows/vw-eu-attestation-watcher.yml) also
+# knows an 8-header variant answered with HTTP 403 and plain
+# ``invalid assertion``; no production call path sends that today, so it is
+# not matched here — whoever switches to the 8-header set must widen both the
+# status gate and this marker.
+_EU_ATTESTATION_ERROR = "invalid assertion headers"
 
 _AUTH_TIMEOUT = ClientTimeout(total=30)  # per-request timeout for auth flows
 # v2.12.4 (#438) — token-endpoint statuses that mean "VW backend is having a
@@ -449,8 +462,14 @@ class IDKAuth:
             if not name or value is None:
                 continue
             domain = str(ck.get("domain") or "")
-            if "vwgroup.io" not in domain:
-                # Defensive: never restore cookies for other domains.
+            # Boundary check, not a substring test. ``"vwgroup.io" not in
+            # domain`` ADMITTED ``vwgroup.io.attacker.com`` and
+            # ``evil-vwgroup.io`` — a persisted cookie carrying either would be
+            # restored into the jar here and then sent to that host on the next
+            # request. The same mistake, and the fix for it, is documented at
+            # the cookie-import guard in _website_authproxy.py (#632); this
+            # copy had been left on the old form.
+            if not host_in_domains(domain, "vwgroup.io"):
                 continue
             morsel: Morsel[str] = Morsel()
             morsel.set(str(name), str(value), str(value))
@@ -488,7 +507,11 @@ class IDKAuth:
                 domain = cookie.get("domain") or cookie["domain"] or ""
             except (KeyError, AttributeError):
                 continue
-            if "vwgroup.io" not in str(domain):
+            # Boundary check on the way OUT too: a substring test would
+            # copy a foreign cookie into the persisted blob, and the import
+            # above would then be the only thing standing between it and the
+            # jar. Two guards of the same shape, so neither can be the weak one.
+            if not host_in_domains(str(domain), "vwgroup.io"):
                 continue
             try:
                 out.append({
@@ -1882,8 +1905,9 @@ class IDKAuth:
         # CARIAD-BFF brands we build the Cartesian product of:
         #   - OAuth client_id chain (canonical + APK alternates)
         #   - qmauth chain (current + prior, in case VW re-rotated)
-        # Total attempts capped at ~6 per call (3 client_ids × 2 qmauth
-        # tuples). The first 200 short-circuits the rest.
+        # The size depends on the brand: Audi has 3 client_ids × 2 qmauth
+        # tuples = 6, VW EU 4 × 2 = 8 (#1712's log: attempts #0–#6 moving on,
+        # then the last one failing). The first 200 short-circuits the rest.
         if self._brand.name in ("audi", "volkswagen"):
             client_id_chain = resolver.oauth_client_id_chain()
             qmauth_chain = resolver.qmauth_chain()
@@ -1917,6 +1941,12 @@ class IDKAuth:
             attempts = [(cid, "", "") for cid in client_id_chain]
 
         last_error: AuthenticationError | None = None
+        # #1712 — the qmauth secrets that have drawn the attestation answer.
+        # The chain carries the PRIOR qmauth pair on purpose (VW re-rotations),
+        # and a stale secret plausibly earns the same answer, so one hit is not
+        # yet proof of the wall. Every secret in the chain refused is.
+        _qm_secrets = {qm_s for (_cid, qm_s, _qmc) in attempts}
+        _attested_qm: set[str] = set()
         for idx, (client_id, qm_secret, qm_client_id) in enumerate(attempts):
             data: dict[str, str] = {
                 "client_id": client_id,
@@ -2030,6 +2060,36 @@ class IDKAuth:
                             "VW North America sign-in blocked by device "
                             f"attestation (HTTP {resp.status})"
                         )
+                    # #1712 — the EU twin of the wall above. The login
+                    # succeeded (code in hand); the exchange rejects the
+                    # headers we sign it with. Only Audi/VW sign assertion
+                    # headers, so only they are judged by this answer. The
+                    # shipping app no longer carries the qmauth scheme at all
+                    # (see ``EuropeAttestationError``), so once every qmauth
+                    # secret has drawn this answer the remaining client_id
+                    # candidates cannot change it: stop there instead of
+                    # spending the whole chain (six rejected sign-ins per
+                    # login on Audi, eight on VW EU; a refresh that fails
+                    # falls back to a login).
+                    if (
+                        self._brand.name in ("audi", "volkswagen")
+                        and resp.status in (400, 401)
+                        and oauth_error_code(body).lower()
+                        == _EU_ATTESTATION_ERROR
+                    ):
+                        _attested_qm.add(qm_secret)
+                    if _attested_qm and _attested_qm >= _qm_secrets:
+                        _LOGGER.warning(
+                            "Token exchange (%s): sign-in blocked by VW device "
+                            "attestation (HTTP %d, %s). The login itself "
+                            "succeeded — this is not a credentials issue, and "
+                            "no retry can pass it.",
+                            self._brand.name, resp.status, _EU_ATTESTATION_ERROR,
+                        )
+                        raise EuropeAttestationError(
+                            "Sign-in blocked by VW device attestation "
+                            f"(HTTP {resp.status}, {_EU_ATTESTATION_ERROR})"
+                        )
                     # 4xx → try next (client_id, qmauth) attempt.
                     if 400 <= resp.status < 500 and idx < len(attempts) - 1:
                         _LOGGER.debug(
@@ -2116,6 +2176,22 @@ class IDKAuth:
             return None
 
         cb_url = _make_absolute(consent_url, callback)
+        # Same guard as the EU Data Act port of this method, and for the same
+        # reason: ``callback`` comes out of the consent page's own URL, so it is
+        # chosen by a remote party, and the next line fetches it with this
+        # client's headers. Accept the host that served the consent page (which
+        # is what a relative callback resolves to) and vwgroup.io with its
+        # subdomains, where the brand IDPs and the measured callbacks live.
+        # Refuse everything else and fall through to the caller's existing
+        # "cannot auto-skip" path rather than inventing a new failure.
+        _consent_host = urlparse(consent_url).hostname or ""
+        if not is_https_on_domains(cb_url, _consent_host, "vwgroup.io"):
+            _LOGGER.debug(
+                "IDK consent-skip: off-domain callback target on %s — not"
+                " following it",
+                _safe_url(consent_url),
+            )
+            return None
         try:
             async with self._session.get(
                 cb_url,

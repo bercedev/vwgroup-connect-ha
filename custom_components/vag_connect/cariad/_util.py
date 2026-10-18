@@ -9,8 +9,45 @@ import logging
 import re
 from datetime import datetime, timezone
 from typing import Any, Iterable
+from urllib.parse import urlsplit
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def host_in_domains(host: str | None, *domains: str) -> bool:
+    """True iff ``host`` IS one of ``domains`` or a true subdomain of one.
+
+    A boundary check, never a substring test. ``"vwgroup.io" in domain`` admits
+    ``vwgroup.io.attacker.com``, which is the shape #632 was filed about, and
+    it also admits ``evil-vwgroup.io`` — both are foreign hosts that read as
+    ours. Only an exact match or a dot-separated suffix counts.
+
+    A leading dot is stripped, because that is how a cookie domain is written.
+    """
+    h = (host or "").strip().lstrip(".").lower().rstrip(".")
+    if not h:
+        return False
+    for raw in domains:
+        d = (raw or "").strip().lstrip(".").lower().rstrip(".")
+        if d and (h == d or h.endswith("." + d)):
+            return True
+    return False
+
+
+def is_https_on_domains(url: str | None, *domains: str) -> bool:
+    """True iff ``url`` is https AND its host passes :func:`host_in_domains`.
+
+    For pinning a request target that was named by a remote party. Both halves
+    matter: the scheme stops a downgrade to cleartext (or to ``file:``), and the
+    host check stops the request going somewhere we never meant to talk to.
+    """
+    if not url:
+        return False
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return False
+    return parts.scheme == "https" and host_in_domains(parts.hostname, *domains)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
