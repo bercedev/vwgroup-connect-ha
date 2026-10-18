@@ -85,6 +85,11 @@ _PROBE_CB_THRESHOLD  = 3
 # requests on this client for a cool-down window instead of hammering. A hammered
 # account can get locked for hours (myskoda #1053 precedent), so the cure must not
 # be more polling. The hold is per-client = per-account (one client per entry).
+#: Floor and ceiling for a server-supplied ``Retry-After`` on a 429. The floor
+#: keeps a ``Retry-After: 1`` from turning into a thrash loop; the ceiling is the
+#: hard-lockout hold, so no header can park the client for longer than an
+#: explicit 430 would.
+_RETRY_AFTER_MIN_S = 30
 _LOCKOUT_429_S = 1800   # 30 min once 429 retries are exhausted
 _LOCKOUT_430_S = 7200   # 2 h on a hard 430 (explicit lockout signal)
 # VW EU Two-Way (650d46ca): the ~1 h device-grant Bearer is NON-refreshable, and
@@ -1450,6 +1455,32 @@ class CariadBaseClient:
             return 0
         return int(remaining)
 
+    @staticmethod
+    def _retry_after_seconds(headers: Any) -> int | None:
+        """``Retry-After`` from THIS response, in seconds, or None.
+
+        A staticmethod on purpose: it is handed the headers and has no instance
+        to consult, so it cannot decide from remembered state even by accident.
+
+        That is not a stylistic choice. The official Škoda channel keeps a
+        ``retry_after_s`` attribute and had to learn the hard way that reading
+        it here is wrong — it is set on a 429 and never cleared, so any later
+        4xx inherited the old window and parked a healthy read channel. This
+        class holds no such attribute, and the signature is what keeps it that
+        way.
+
+        Only the delta-seconds form is honoured. RFC 9110 also allows an
+        HTTP-date, and a half-parsed date is worse than no value: an unparsed
+        header simply leaves the existing backoff in charge.
+        """
+        raw = headers.get("Retry-After") if headers is not None else None
+        if raw is None:
+            return None
+        text = str(raw).strip()
+        if not text.isdigit():
+            return None
+        return int(text)
+
     def _enter_rate_lockout(self, seconds: int, status: int) -> None:
         """Pause all requests on this client for ``seconds`` (B4)."""
         self._rate_limit_locked_until = time.monotonic() + seconds
@@ -1468,7 +1499,12 @@ class CariadBaseClient:
 
         - HTTP 401 → token refresh + 1 retry. Refresh itself is throttled
           to ``_REFRESH_MAX_PER_HOUR`` per rolling hour (storm protection).
-        - HTTP 429 → exponential backoff up to 3 attempts (5s/10s/20s).
+        - HTTP 429 with ``Retry-After`` → NO retry; the client holds for the
+          stated time (clamped to ``_RETRY_AFTER_MIN_S``..``_LOCKOUT_430_S``).
+          Spending retries against an explicit instruction is how a 429
+          becomes a 430 (#1850).
+        - HTTP 429 without it → exponential backoff up to 3 attempts
+          (5s/10s/20s), then the account lockout.
         - HTTP 500/502/503/504 → exponential backoff up to 3 attempts
           (3s/6s/12s). 504 added in v1.8.7 — Gateway Timeouts from the
           CARIAD BFF are routine on weekends and were previously surfaced
@@ -1530,14 +1566,57 @@ class CariadBaseClient:
                 if resp.status == 401 and retry:
                     await self._refresh_tokens(stale_access_token=token_used)
                     return await self._request(method, url, retry=False, **kwargs)
-                if resp.status == 429 and _attempt < 3:
-                    wait = (2 ** _attempt) * 5
-                    _LOGGER.debug("Rate limited (429) — retrying in %ds", wait)
-                    await asyncio.sleep(wait)
-                    return await self._request(method, url, retry=retry, _attempt=_attempt + 1, **kwargs)
+                if resp.status in (429, 430):
+                    # #1850 — these two are the responses whose headers are ABOUT
+                    # the rate limit, so this is exactly when the quota is worth
+                    # recording. The 2xx-only rule below exists because an
+                    # arbitrary 4xx may omit or staleify them; a 429 reporting
+                    # ``remaining: 0`` is neither omitted nor stale, and a
+                    # reporter attaching diagnostics after a lockout could not
+                    # previously show us their budget at all.
+                    self._capture_rate_limit_headers(resp.headers)
                 if resp.status == 429:
-                    # retries exhausted — back off the whole account (B4)
-                    self._enter_rate_lockout(_LOCKOUT_429_S, 429)
+                    # #1850 — when the backend says HOW LONG, stop asking.
+                    #
+                    # @indigomejor measured an account lockout and then a hard
+                    # 430 at a LOWER request rate with no second client. Part of
+                    # the reason is here: a 429 was retried three times at
+                    # 5/10/20 s before the account lockout engaged, so a
+                    # throttled call spent three more requests at the precise
+                    # moment the backend had said "too many" — and
+                    # ``Retry-After`` was never read on this shared path, so the
+                    # wait that followed was our 30 minutes rather than the
+                    # server's number, in either direction.
+                    #
+                    # With the header present there is nothing to probe for: the
+                    # answer is in hand, so the retries are skipped entirely and
+                    # the client holds for what was asked. Clamped at both ends
+                    # so neither a 1-second nor a day-long value is taken
+                    # literally.
+                    _retry_after = self._retry_after_seconds(resp.headers)
+                    if _retry_after is not None:
+                        _hold = max(
+                            _RETRY_AFTER_MIN_S, min(_retry_after, _LOCKOUT_430_S)
+                        )
+                        _LOGGER.debug(
+                            "Rate limited (429) with Retry-After %ds — honouring"
+                            " it instead of retrying (holding %ds)",
+                            _retry_after, _hold,
+                        )
+                        self._enter_rate_lockout(_hold, 429)
+                    elif _attempt < 3:
+                        # No instruction from the server: unchanged behaviour,
+                        # because a bare 429 can still be a momentary burst and
+                        # giving up on it would lose reads that work today.
+                        wait = (2 ** _attempt) * 5
+                        _LOGGER.debug("Rate limited (429) — retrying in %ds", wait)
+                        await asyncio.sleep(wait)
+                        return await self._request(
+                            method, url, retry=retry, _attempt=_attempt + 1, **kwargs
+                        )
+                    else:
+                        # retries exhausted — back off the whole account (B4)
+                        self._enter_rate_lockout(_LOCKOUT_429_S, 429)
                 if resp.status == 430:
                     # explicit hard lockout signal — long account-scoped hold (B4)
                     self._enter_rate_lockout(_LOCKOUT_430_S, 430)
