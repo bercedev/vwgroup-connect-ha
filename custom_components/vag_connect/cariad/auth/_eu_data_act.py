@@ -46,7 +46,11 @@ from urllib.parse import parse_qs, urljoin, urlparse
 
 from aiohttp import ClientConnectionError, ClientSession, ClientTimeout
 
-from .._util import drop_charge_sentinel, drop_odometer_sentinel
+from .._util import (
+    drop_charge_sentinel,
+    drop_odometer_sentinel,
+    is_https_on_domains,
+)
 from ..exceptions import (
     AuthenticationError,
     CariadError,
@@ -5846,6 +5850,37 @@ class EUDataActConnector:
             )
             return None
         cb_url = urljoin(landing_url, callback)
+        # The callback is named by the page we landed on, i.e. by a remote
+        # party, and we then FETCH it with the login headers attached. Pin it
+        # before following: an absolute ``callback=https://elsewhere/`` would
+        # otherwise send a request from the user's Home Assistant to a host of
+        # someone else's choosing. Both reference implementations the portal
+        # operator points maintainers at validate this target, and the
+        # ioBroker one added exactly this check on 2026-10-08.
+        #
+        # Deliberately generous, because a false refusal is the more likely
+        # harm: it ends the login in MarketingConsentError, and that is certain
+        # where the diversion is hypothetical. Three things are accepted —
+        #   * the host that served the consent page itself. A callback that
+        #     resolves there is not a diversion; we are already talking to it,
+        #     and this is what every RELATIVE callback resolves to.
+        #   * vwgroup.io and its subdomains, which is where the measured
+        #     callbacks point (identity.vwgroup.io/oidc/v1/...) and where the
+        #     brand IDPs live (cupraid, skodaid, audi-id).
+        #   * the portal's own host.
+        # Anything else, and anything not https, falls through to the
+        # classifier exactly as a missing callback already does.
+        _landed_host = urlparse(landing_url).hostname or ""
+        if not is_https_on_domains(
+            cb_url, _landed_host, "vwgroup.io", urlparse(_PORTAL_BASE).hostname or "",
+        ):
+            _LOGGER.debug(
+                "EU Data Act portal: the consent page at %s named an off-domain"
+                " callback target — not following it, leaving the verdict to the"
+                " classifier",
+                _safe_url(landing_url),
+            )
+            return None
         try:
             result = await self._follow_login_redirects(
                 "GET", cb_url, headers=headers,

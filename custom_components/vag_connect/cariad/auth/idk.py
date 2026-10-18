@@ -47,7 +47,7 @@ from ..exceptions import (
     UpstreamUnavailableError,
 )
 from ..models import BrandConfig, TokenSet
-from .._util import oauth_error_code
+from .._util import host_in_domains, is_https_on_domains, oauth_error_code
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -462,8 +462,14 @@ class IDKAuth:
             if not name or value is None:
                 continue
             domain = str(ck.get("domain") or "")
-            if "vwgroup.io" not in domain:
-                # Defensive: never restore cookies for other domains.
+            # Boundary check, not a substring test. ``"vwgroup.io" not in
+            # domain`` ADMITTED ``vwgroup.io.attacker.com`` and
+            # ``evil-vwgroup.io`` — a persisted cookie carrying either would be
+            # restored into the jar here and then sent to that host on the next
+            # request. The same mistake, and the fix for it, is documented at
+            # the cookie-import guard in _website_authproxy.py (#632); this
+            # copy had been left on the old form.
+            if not host_in_domains(domain, "vwgroup.io"):
                 continue
             morsel: Morsel[str] = Morsel()
             morsel.set(str(name), str(value), str(value))
@@ -501,7 +507,11 @@ class IDKAuth:
                 domain = cookie.get("domain") or cookie["domain"] or ""
             except (KeyError, AttributeError):
                 continue
-            if "vwgroup.io" not in str(domain):
+            # Boundary check on the way OUT too: a substring test would
+            # copy a foreign cookie into the persisted blob, and the import
+            # above would then be the only thing standing between it and the
+            # jar. Two guards of the same shape, so neither can be the weak one.
+            if not host_in_domains(str(domain), "vwgroup.io"):
                 continue
             try:
                 out.append({
@@ -2166,6 +2176,22 @@ class IDKAuth:
             return None
 
         cb_url = _make_absolute(consent_url, callback)
+        # Same guard as the EU Data Act port of this method, and for the same
+        # reason: ``callback`` comes out of the consent page's own URL, so it is
+        # chosen by a remote party, and the next line fetches it with this
+        # client's headers. Accept the host that served the consent page (which
+        # is what a relative callback resolves to) and vwgroup.io with its
+        # subdomains, where the brand IDPs and the measured callbacks live.
+        # Refuse everything else and fall through to the caller's existing
+        # "cannot auto-skip" path rather than inventing a new failure.
+        _consent_host = urlparse(consent_url).hostname or ""
+        if not is_https_on_domains(cb_url, _consent_host, "vwgroup.io"):
+            _LOGGER.debug(
+                "IDK consent-skip: off-domain callback target on %s — not"
+                " following it",
+                _safe_url(consent_url),
+            )
+            return None
         try:
             async with self._session.get(
                 cb_url,

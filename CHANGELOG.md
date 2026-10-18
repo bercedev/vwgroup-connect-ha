@@ -270,6 +270,23 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   integration now says so in every shipped language instead of blaming your password. Measured on an Audi e-tron 50 quattro, MY2022, and
   contributed by @woifh (#1712).
 
+### Sicherheit / Security
+
+- **Sign-in host hardening.** Two guards in the login code decided whether a
+  host was the manufacturer's by looking for a name *inside* it rather than
+  matching the name itself, and one step followed a continuation link offered
+  by a page without checking where that link pointed. All three now match on a
+  name boundary, and the link is followed only back to the page that offered
+  it, to the manufacturer's own sign-in hosts, or to the portal.
+
+  **Nothing about a working sign-in changes.** The same reference
+  implementations the portal operator points maintainers at already validate
+  the same thing, every legitimate value in the project's own fixtures was
+  checked against the new rule, and a live read-only portal login completes
+  unchanged. A value outside that set now ends the sign-in with the same notice
+  an absent one already produced, instead of being followed, and the notice
+  names the page rather than the value.
+
 ## [5.0.0] - 2026-10-16 — Two doors the manufacturer closed / Zwei Türen, die der Hersteller zugemacht hat
 
 - **Volkswagen Companion (ADB): VW app 4.6.4 mapping, controls, more reads and safety gates.** Developed against a Tiguan eHybrid (reads verified on the car) in [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha) (fork releases 4.11.0-1 to 4.13.0-4, plus the fixes from this PR's review; PR numbers below refer to that repository). Thanks @gszigethy; app captures from @plainmad (Mk8 Golf GTE), @kgroshert (ID.4, e-up!) and @WEZANGO (CUPRA Born) ([#968](https://github.com/its-me-prash/vwgroup-connect-ha/issues/968)). Functional and technical design: [docs/COMPANION.md](docs/COMPANION.md).
