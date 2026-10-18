@@ -210,7 +210,8 @@
       "missing_captcha": "Skriv inn tegnene som vises i bildet over.",
       "captcha_retry": "Løs captchaen som vises over for å fortsette.",
       "companion_addon_token_required": "An add-on token is required for new connections. Set api_token in the ADB Bridge add-on and enter the same token here.",
-      "companion_agent_token_weak": "The agent token is too predictable. Use the generated random token or a random token with at least 32 characters and 16 distinct characters, with no character making up more than half."
+      "companion_agent_token_weak": "The agent token is too predictable. Use the generated random token or a random token with at least 32 characters and 16 distinct characters, with no character making up more than half.",
+      "eu_signin_attestation": "E-posten og passordet ditt er i orden — selve påloggingen virket, og autorisasjonskoden kom tilbake. Volkswagen nekter nå det siste trinnet, å bytte den koden mot et token, fordi de krever en Google-signert enhetsattestering (Play Integrity) som bare den offisielle appen på en ekte telefon kan lage. Å skrive passordet på nytt hjelper ikke, og det gjør heller ikke et nytt forsøk. Den skrivebeskyttede EU Data Act-portalen, som vanligvis tar over i dette tilfellet, fungerte heller ikke for denne kontoen: sjekk i portalen at datadeling er slått på for bilen din. (Spores: #1712.)"
     },
     "abort": {
       "already_configured": "Denne kontoen er allerede konfigurert.",
@@ -2647,6 +2648,10 @@
     "device_login_grant_retired": {
       "title": "Gjenopprett {brand} med e-post og passord",
       "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
+    },
+    "eu_signin_attestation": {
+      "title": "Volkswagen blokkerer innloggingen for {brand}",
+      "description": "E-posten og passordet ditt er i orden — selve påloggingen virket, og autorisasjonskoden kom tilbake. Volkswagen nekter nå det siste trinnet, å bytte den koden mot et token, fordi de krever en Google-signert enhetsattestering (Play Integrity) som bare den offisielle appen på en ekte telefon kan lage. Å skrive passordet på nytt hjelper ikke, og det gjør heller ikke et nytt forsøk. Den skrivebeskyttede EU Data Act-portalen, som vanligvis tar over i dette tilfellet, fungerte heller ikke for denne kontoen: sjekk i portalen at datadeling er slått på for bilen din. (Spores: #1712.)"
     }
   },
   "services": {

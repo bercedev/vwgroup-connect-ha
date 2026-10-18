@@ -210,7 +210,8 @@
       "missing_captcha": "Zadej znaky zobrazené na obrázku výše.",
       "captcha_retry": "Pro pokračování vyřeš captcha zobrazenou výše.",
       "companion_addon_token_required": "An add-on token is required for new connections. Set api_token in the ADB Bridge add-on and enter the same token here.",
-      "companion_agent_token_weak": "The agent token is too predictable. Use the generated random token or a random token with at least 32 characters and 16 distinct characters, with no character making up more than half."
+      "companion_agent_token_weak": "The agent token is too predictable. Use the generated random token or a random token with at least 32 characters and 16 distinct characters, with no character making up more than half.",
+      "eu_signin_attestation": "Váš e-mail i heslo jsou v pořádku — samotné přihlášení proběhlo a autorizační kód se vrátil. Volkswagen nyní odmítá poslední krok, výměnu tohoto kódu za token, protože vyžaduje Googlem podepsané ověření zařízení (Play Integrity), které dokáže vytvořit jen oficiální aplikace na skutečném telefonu. Opětovné zadání hesla nepomůže a další pokus také ne. Portál EU Data Act určený jen pro čtení, který v takovém případě obvykle převezme data, pro tento účet také nefungoval: zkontrolujte v portálu, že je pro váš vůz zapnuté sdílení dat. (Sledováno: #1712.)"
     },
     "abort": {
       "already_configured": "Tento účet je již nastaven.",
@@ -2647,6 +2648,10 @@
     "device_login_grant_retired": {
       "title": "Obnovit {brand} pomocí e-mailu a hesla",
       "description": "The sign-in session for this entry has expired and cannot be renewed.\n\nThis entry was set up with the code sign-in, and that route is closed: the manufacturer switched off the app sign-in this brand used, so a new code can no longer be requested. This is not a wrong-password problem and it is nothing you did wrong.\n\nChoose **Repair** and sign in with your email and password. The entry keeps its history, its settings and its entity names, so nothing has to be removed and added again.\n\nUntil then the entities stay unavailable."
+    },
+    "eu_signin_attestation": {
+      "title": "Volkswagen blokuje přihlášení pro {brand}",
+      "description": "Váš e-mail i heslo jsou v pořádku — samotné přihlášení proběhlo a autorizační kód se vrátil. Volkswagen nyní odmítá poslední krok, výměnu tohoto kódu za token, protože vyžaduje Googlem podepsané ověření zařízení (Play Integrity), které dokáže vytvořit jen oficiální aplikace na skutečném telefonu. Opětovné zadání hesla nepomůže a další pokus také ne. Portál EU Data Act určený jen pro čtení, který v takovém případě obvykle převezme data, pro tento účet také nefungoval: zkontrolujte v portálu, že je pro váš vůz zapnuté sdílení dat. (Sledováno: #1712.)"
     }
   },
   "services": {

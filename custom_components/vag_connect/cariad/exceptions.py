@@ -388,6 +388,33 @@ class NorthAmericaAttestationError(AuthenticationError):
     config flow can surface the real reason instead of ``invalid_credentials``."""
 
 
+class EuropeAttestationError(AuthenticationError):
+    """#1712 — the EU twin of the above, on the CARIAD BFF token endpoint.
+
+    The login itself works: the right page, the right POST, ``authenticated``,
+    and an authorization code comes back. Trading that code for a token is what
+    fails, with ``400`` and the OAuth error ``invalid assertion headers`` — a
+    statement about the headers we sign the request with, not about the account.
+
+    Grounded in the shipping app rather than inferred: myAudi 5.8.1 carries no
+    ``qmauth`` symbol in any of its six DEX files or its native libraries, nor
+    the HMAC secret this integration signs ``x-qmauth`` with, while it does
+    carry the Play Integrity client (``StandardIntegrityManager``,
+    ``requestIntegrityToken``) and still sends ``x-assertion``. The app has
+    moved from the HMAC scheme to a Google-signed attestation token bound to
+    VW's package and signing certificate, which very likely no open-source
+    client can mint.
+
+    Raised once every qmauth secret in the chain has drawn that answer (one
+    stale secret alone is not proof: the chain keeps the prior pair for VW
+    re-rotations). The remaining client_id candidates cannot change an answer
+    about the headers, and walking them costs six rejected sign-ins per login
+    on Audi and eight on VW EU against an endpoint this project elsewhere warns about rate-limiting
+    (``RateLimitError``). ``authenticate()`` hands it on when the portal
+    fallback then fails generically, so the user hears this instead of
+    "invalid credentials"."""
+
+
 class TermsAndConditionsError(AuthenticationError):
     """Terms and conditions must be accepted in the app before API access."""
 
