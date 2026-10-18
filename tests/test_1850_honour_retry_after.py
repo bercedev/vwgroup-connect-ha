@@ -145,14 +145,75 @@ async def test_a_tiny_retry_after_is_floored() -> None:
 
 
 @pytest.mark.asyncio
-async def test_an_absurd_retry_after_is_capped_at_the_hard_hold() -> None:
-    """A day-long value must not park the client for a day. The ceiling is the
-    explicit-430 hold, so no header can be worse than a hard refusal."""
+async def test_an_absurd_retry_after_cannot_exceed_what_a_429_already_held() -> None:
+    """The ceiling, and the first version of this test had it wrong.
+
+    It clamped to ``_LOCKOUT_430_S`` and called that a safety bound, on the
+    reasoning that no header should be worse than an explicit hard refusal.
+    Wrong comparison: the bound worth keeping is what a soft 429 could do
+    BEFORE this change, which was ``_LOCKOUT_429_S``. At 7200 a single header
+    value could have taken the whole account dark for two hours — four times
+    longer than any number of 429s had ever managed — while the pull request
+    described the ceiling as protective.
+
+    A backend asking for longer is therefore not honoured in full, and that is
+    the deliberate choice: resuming at 30 minutes sends ONE request, because
+    the retries are gone, and a refusal of that one is honoured in turn.
+    """
     client, calls = _client_with([_resp(429, {"Retry-After": "86400"})])
     await _get(client)
     assert calls["i"] == 1
     remaining = client._rate_lockout_remaining()
+    assert _LOCKOUT_429_S - 10 < remaining <= _LOCKOUT_429_S, remaining
+    assert remaining < _LOCKOUT_430_S, (
+        "a soft 429 armed a hold as long as an explicit 430 — the account-wide "
+        "two-hour stall must stay reachable only from a real 430"
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_430_still_gets_the_full_hard_hold() -> None:
+    """The other side of the same bound: narrowing the 429 ceiling must not
+    shorten what an explicit hard refusal arms."""
+    client, _ = _client_with([_resp(430, {"Retry-After": "60"})])
+    await _get(client)
+    remaining = client._rate_lockout_remaining()
     assert _LOCKOUT_430_S - 10 < remaining <= _LOCKOUT_430_S, remaining
+
+
+def test_a_short_hold_is_not_logged_as_zero_minutes() -> None:
+    """The second thing the pre-merge review caught.
+
+    ``_enter_rate_lockout`` rendered its duration as ``seconds // 60``, so
+    every hold under a minute — which is the entire band the 30-second floor
+    creates — logged "pausing all requests for 0 min", in a sentence that goes
+    on to say "to avoid a multi-hour account lock". The one line a reporter
+    pastes claimed both no wait and a multi-hour threat at once.
+    """
+    from custom_components.vag_connect.cariad.api.base import _format_duration
+
+    assert _format_duration(_RETRY_AFTER_MIN_S) == "30s"
+    assert _format_duration(45) == "45s"
+    assert _format_duration(59) == "59s"
+    assert _format_duration(60) == "1 min"
+    assert _format_duration(_LOCKOUT_429_S) == "30 min"
+    assert _format_duration(_LOCKOUT_430_S) == "2h"
+    assert "0 min" not in _format_duration(_RETRY_AFTER_MIN_S)
+
+
+def test_the_lockout_warning_states_the_duration_it_actually_set(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Through the real call, not only the formatter: a floored hold has to read
+    as a short wait in the log a user sees."""
+    import logging
+
+    client, _ = _client_with([_resp(200)])
+    with caplog.at_level(logging.WARNING, logger="custom_components.vag_connect.cariad.api.base"):
+        client._enter_rate_lockout(_RETRY_AFTER_MIN_S, 429)
+    logged = " ".join(r.getMessage() for r in caplog.records)
+    assert "30s" in logged, logged
+    assert "0 min" not in logged, logged
 
 
 @pytest.mark.asyncio

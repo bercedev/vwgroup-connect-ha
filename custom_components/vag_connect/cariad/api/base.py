@@ -85,10 +85,22 @@ _PROBE_CB_THRESHOLD  = 3
 # requests on this client for a cool-down window instead of hammering. A hammered
 # account can get locked for hours (myskoda #1053 precedent), so the cure must not
 # be more polling. The hold is per-client = per-account (one client per entry).
-#: Floor and ceiling for a server-supplied ``Retry-After`` on a 429. The floor
-#: keeps a ``Retry-After: 1`` from turning into a thrash loop; the ceiling is the
-#: hard-lockout hold, so no header can park the client for longer than an
-#: explicit 430 would.
+#: Floor and ceiling for a server-supplied ``Retry-After`` on a 429.
+#:
+#: The floor keeps a ``Retry-After: 1`` from turning into a thrash loop.
+#:
+#: The ceiling is ``_LOCKOUT_429_S``, i.e. what an exhausted 429 already held
+#: for, and NOT the 430 hold. Clamping to the 430 value was the first attempt
+#: and it was wrong: the bound worth keeping is what a soft 429 could do
+#: BEFORE, not what an explicit hard lockout does. With 7200 a single header
+#: value could have taken the whole account dark for two hours, four times
+#: longer than any number of 429s had ever managed.
+#:
+#: A backend asking for longer than 30 minutes is therefore not honoured in
+#: full. That is deliberate: resuming at 30 minutes sends ONE request, because
+#: the retries are gone, and if it is refused again that refusal is honoured in
+#: turn. One request per half hour is a smaller risk than an account-wide
+#: two-hour stall arming on a value we cannot audit.
 _RETRY_AFTER_MIN_S = 30
 _LOCKOUT_429_S = 1800   # 30 min once 429 retries are exhausted
 _LOCKOUT_430_S = 7200   # 2 h on a hard 430 (explicit lockout signal)
@@ -122,6 +134,21 @@ _TRANSIENT_NET_ERRORS: tuple[type[BaseException], ...] = (
     ClientPayloadError,
     asyncio.TimeoutError,
 )
+
+
+def _format_duration(seconds: int) -> str:
+    """A pause the reader can act on: seconds under a minute, minutes above.
+
+    Introduced with #1850, where the lockout gained holds shorter than a minute
+    and the previous ``%d min`` rendered all of them as "0 min".
+    """
+    if seconds < 60:
+        return f"{int(seconds)}s"
+    minutes = int(seconds) // 60
+    if minutes < 60:
+        return f"{minutes} min"
+    hours, rest = divmod(minutes, 60)
+    return f"{hours}h" if rest == 0 else f"{hours}h {rest} min"
 
 
 class CariadBaseClient:
@@ -1456,7 +1483,7 @@ class CariadBaseClient:
         return int(remaining)
 
     @staticmethod
-    def _retry_after_seconds(headers: Any) -> int | None:
+    def _retry_after_seconds(headers: Any) -> int | None:  # noqa: D401
         """``Retry-After`` from THIS response, in seconds, or None.
 
         A staticmethod on purpose: it is handed the headers and has no instance
@@ -1482,12 +1509,20 @@ class CariadBaseClient:
         return int(text)
 
     def _enter_rate_lockout(self, seconds: int, status: int) -> None:
-        """Pause all requests on this client for ``seconds`` (B4)."""
+        """Pause all requests on this client for ``seconds`` (B4).
+
+        The duration is formatted rather than divided. ``seconds // 60`` read
+        "0 min" for every hold under a minute, which since #1850 is a whole
+        band of real holds — a short server-supplied ``Retry-After`` lands
+        there — and the sentence went on to say "to avoid a multi-hour account
+        lock", so the one line a reporter pastes claimed both no wait and a
+        multi-hour threat.
+        """
         self._rate_limit_locked_until = time.monotonic() + seconds
         _LOGGER.warning(
             "Account rate-limit lockout (HTTP %d) on %s — pausing all requests"
-            " for %d min to avoid a multi-hour account lock",
-            status, self._brand.name, seconds // 60,
+            " for %s",
+            status, self._brand.name, _format_duration(seconds),
         )
 
     async def _request(
@@ -1596,7 +1631,7 @@ class CariadBaseClient:
                     _retry_after = self._retry_after_seconds(resp.headers)
                     if _retry_after is not None:
                         _hold = max(
-                            _RETRY_AFTER_MIN_S, min(_retry_after, _LOCKOUT_430_S)
+                            _RETRY_AFTER_MIN_S, min(_retry_after, _LOCKOUT_429_S)
                         )
                         _LOGGER.debug(
                             "Rate limited (429) with Retry-After %ds — honouring"

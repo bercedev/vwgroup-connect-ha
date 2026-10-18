@@ -78,8 +78,12 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   the time actually asked for, which can be wrong in either direction. With the
   header present there is nothing left to find out by asking again: the retries
   are skipped and the client holds for what was requested, with a floor so a
-  one-second value cannot become a loop and a ceiling so no header can pause
-  things for longer than an outright refusal would. A refusal that carries no
+  one-second value cannot become a loop and a ceiling at the half hour this
+  kind of refusal already held for, so no header can stall things for longer
+  than they could be stalled before. A backend asking for more than that is
+  not waited out in full on purpose: resuming after half an hour now sends one
+  request rather than four, and if that one is refused the refusal is honoured
+  in turn. A refusal that carries no
   such instruction behaves exactly as before, because that one can still be a
   momentary burst.
 
