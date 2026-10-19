@@ -133,4 +133,11 @@ def test_no_data_repair_clears_when_data_flows() -> None:
          patch("homeassistant.helpers.issue_registry.async_delete_issue") as delete:
         VagConnectCoordinator._update_data_act_no_data_repair(stub)
     create.assert_not_called()
-    delete.assert_called_once()
+    # Names the repair instead of counting the calls. This was
+    # ``assert_called_once()``, which held only because the session-expired
+    # clear beside it was gated off on a stub with no pending flag; #1867
+    # removed that gate, so data flowing now clears both and the count became
+    # two. Counting incidental calls is what made a correct change look like a
+    # regression.
+    deleted = [c.args[2] for c in delete.call_args_list]
+    assert "data_act_no_data_E1" in deleted, deleted

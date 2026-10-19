@@ -36,9 +36,9 @@ def _coord(*, portal, ola_flag=False, count=0, has_ola_attrs=True):
     return s
 
 
-def _run(s):
+def _run(s, *, at_setup=False):
     with patch(_CLEAR) as clear, patch(_RAISE) as raise_:
-        VagConnectCoordinator._reconcile_ola_repair(s)
+        VagConnectCoordinator._reconcile_ola_repair(s, at_setup=at_setup)
     return clear, raise_
 
 
@@ -54,11 +54,61 @@ def test_portal_mode_clears_and_resets_a_tripped_repair():
     assert s._cariad_client._ola_consecutive_403 == 0
 
 
-def test_portal_mode_with_clean_counters_is_a_noop():
+def test_portal_mode_clears_even_with_clean_counters():
+    """This test used to assert the opposite, and the opposite was the bug.
+
+    #1866 (@georghaberkorn68-ctrl): a CUPRA entry serving through the portal
+    carried this repair at a count of 535 since August. The repair lives in
+    Home Assistant's issue registry and outlives the client whose counters
+    raised it, so the entry that most needs the clear is precisely the one
+    whose counters are clean — a fresh client after a restart. Skipping the
+    clear there saved one call to delete an issue that may not exist, which is
+    a no-op, and cost a repair frozen on for two months.
+    """
     s = _coord(portal=True, ola_flag=False, count=0)
     clear, raise_ = _run(s)
+    clear.assert_called_once_with(s.hass, "e1")
+    raise_.assert_not_called()
+
+
+# ── #1866: the clear has to be reachable from setup, not only from a poll ────
+
+def test_at_setup_a_portal_entry_is_cleared():
+    """The #1301 fix was working; it just lived in the poll loop, which is the
+    one place an entry whose poll never completes does not get to."""
+    s = _coord(portal=True, ola_flag=False, count=0)
+    clear, raise_ = _run(s, at_setup=True)
+    clear.assert_called_once_with(s.hass, "e1")
+    raise_.assert_not_called()
+
+
+def test_at_setup_a_non_portal_entry_is_left_entirely_alone():
+    """Narrowed on purpose. At setup the client is new, so its counters are
+    zero and the "no history, clear it" branch would fire for every entry on
+    every restart — including one whose OLA access really is revoked, whose
+    repair would vanish at each restart and return after the first poll.
+    Flicker on a real problem is worse than a stale repair on a moot one."""
+    s = _coord(portal=False, ola_flag=False, count=0)
+    clear, raise_ = _run(s, at_setup=True)
     clear.assert_not_called()
     raise_.assert_not_called()
+
+
+def test_at_setup_a_tripped_non_portal_entry_is_not_raised_either():
+    """Raising belongs to the poll that observed the 403s, not to setup."""
+    s = _coord(portal=False, ola_flag=True, count=270)
+    clear, raise_ = _run(s, at_setup=True)
+    clear.assert_not_called()
+    raise_.assert_not_called()
+
+
+def test_setup_actually_calls_it():
+    """Structural, because the two behavioural tests above cannot see a helper
+    that is never reached — which is the whole defect being fixed."""
+    import inspect
+
+    src = inspect.getsource(VagConnectCoordinator.async_setup)
+    assert "_reconcile_ola_repair(at_setup=True)" in src
 
 
 # ── non-portal entries keep the honest OLA repair (no regression) ────────────

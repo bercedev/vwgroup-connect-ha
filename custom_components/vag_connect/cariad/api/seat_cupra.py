@@ -289,8 +289,24 @@ class SeatCupraClient(CariadBaseClient):
         try:
             data = await self._get(f"{_BASE}/v1/users")
             self._user_id = data.get("userId") or data.get("sub")
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning("Could not fetch SEAT/CUPRA user ID")
+        except Exception as err:  # noqa: BLE001
+            # #1866 — this used to be a bare message with nothing in it, so a
+            # 401, a 403, a timeout and a malformed body all came out as the
+            # same sentence. @georghaberkorn68-ctrl attached a twelve-minute
+            # debug log in which this line is the only trace of the failure, and
+            # the question put to him — was it 401 or 403? — could not be
+            # answered from any log this code is able to produce.
+            #
+            # The class name and the status, and deliberately nothing else: an
+            # APIError's message can carry the request URL and a response body,
+            # which is the same reason the token-exchange failure next door logs
+            # a byte count instead of its body.
+            _status = getattr(err, "status", None)
+            _LOGGER.warning(
+                "Could not fetch SEAT/CUPRA user ID: %s%s",
+                type(err).__name__,
+                f" (HTTP {_status})" if _status else "",
+            )
 
     async def _get_from_charging_host(self, path: str) -> dict[str, Any]:
         """v2.10.0 (charging_statistics) - GET on the CARIAD charging-stats host.

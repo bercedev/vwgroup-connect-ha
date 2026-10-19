@@ -150,7 +150,7 @@ def _coord_self(reason: str = "", *, pending: bool = True) -> SimpleNamespace:
     return me
 
 
-def test_session_expired_repair_is_remembered_when_raised() -> None:
+def test_session_expired_repair_is_raised() -> None:
     me = SimpleNamespace(
         hass=MagicMock(), entry=SimpleNamespace(entry_id="e1", data={CONF_BRAND: "skoda"}),
     )
@@ -158,7 +158,9 @@ def test_session_expired_repair_is_remembered_when_raised() -> None:
         VagConnectCoordinator._raise_data_act_session_expired_repair(me)
     create.assert_called_once()
     assert "data_act_session_expired_e1" in str(create.call_args.args)
-    assert me._data_act_session_expired_pending is True
+    # No "remembered" assertion any more: #1867 removed the instance flag this
+    # used to check, because it was the reason the repair could not be cleared
+    # after a reload. See the inverted test at the end of this block.
 
 
 def test_session_expired_repair_clears_once_data_flows_again() -> None:
@@ -167,26 +169,50 @@ def test_session_expired_repair_clears_once_data_flows_again() -> None:
             patch("homeassistant.helpers.issue_registry.async_create_issue"):
         VagConnectCoordinator._update_data_act_no_data_repair(me)
     assert any("data_act_session_expired_e1" in str(c.args) for c in delete.call_args_list)
-    assert me._data_act_session_expired_pending is False
 
 
 def test_session_expired_repair_survives_a_no_data_poll() -> None:
     # the kickoff can raise it mid-cycle; the same cycle's empty dataset must
-    # not erase it straight away
+    # not erase it straight away. This is the condition that carries meaning
+    # and it is unchanged by #1867.
     me = _coord_self("empty", pending=True)
     with patch("homeassistant.helpers.issue_registry.async_delete_issue") as delete, \
             patch("homeassistant.helpers.issue_registry.async_create_issue"):
         VagConnectCoordinator._update_data_act_no_data_repair(me)
     assert not any("data_act_session_expired_e1" in str(c.args) for c in delete.call_args_list)
-    assert me._data_act_session_expired_pending is True
 
 
-def test_session_expired_repair_is_left_alone_when_never_raised() -> None:
+def test_a_repair_raised_before_a_reload_is_still_cleared() -> None:
+    """Inverted on purpose, and this is the #1867 bug.
+
+    The previous version of this test was called "is left alone when never
+    raised" and asserted that a coordinator which had not itself raised the
+    repair must not delete it. @Anoxym showed what that costs: the flag it
+    keyed on lives on the coordinator instance, the repair lives in Home
+    Assistant's issue registry, and a reload builds a new coordinator. So the
+    repair outlived every object able to delete it and a user who had signed in
+    again kept being told their session was expired.
+
+    ``pending=False`` is exactly the state of a coordinator after a reload, so
+    this is the old test with its expectation turned around.
+    """
     me = _coord_self("", pending=False)
     with patch("homeassistant.helpers.issue_registry.async_delete_issue") as delete, \
             patch("homeassistant.helpers.issue_registry.async_create_issue"):
         VagConnectCoordinator._update_data_act_no_data_repair(me)
-    assert not any("data_act_session_expired_e1" in str(c.args) for c in delete.call_args_list)
+    assert any("data_act_session_expired_e1" in str(c.args) for c in delete.call_args_list)
+
+
+def test_the_clear_needs_no_instance_memory_at_all() -> None:
+    """A coordinator that has never heard of the flag must still clear it —
+    an attribute that is simply absent is the real post-reload shape, not
+    ``False``."""
+    me = _coord_self("")
+    del me._data_act_session_expired_pending
+    with patch("homeassistant.helpers.issue_registry.async_delete_issue") as delete, \
+            patch("homeassistant.helpers.issue_registry.async_create_issue"):
+        VagConnectCoordinator._update_data_act_no_data_repair(me)
+    assert any("data_act_session_expired_e1" in str(c.args) for c in delete.call_args_list)
 
 
 def test_coordinator_source_carries_the_porsche_lifecycle_fixes() -> None:
