@@ -2687,17 +2687,46 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                     )
                 errors["base"] = _map_error(str(err))
             else:
+                _new_data = {
+                    **reauth_entry.data,
+                    CONF_USERNAME: username,
+                    CONF_PASSWORD: password,
+                    CONF_SPIN: spin,
+                    # v4.7.7 (#1337) — bridge a Porsche login token so the
+                    # reload reuses it (refresh) instead of re-logging in.
+                    **({"porsche_initial_tokens": _tok} if _tok else {}),
+                }
+                # #1813 — the credentials just changed UNDER the stored token,
+                # and neither copy of that token was being replaced. The QR
+                # branch below states the rule in its own docstring: the
+                # coordinator prefers the persisted store over
+                # ``dag_initial_tokens``, so a reauth that leaves the store
+                # alone re-loads the very token set it was meant to replace. The
+                # QR branch overwrites both; this branch overwrote neither.
+                #
+                # What that cost @ratclma: a converted entry loaded its expired
+                # device-grant token, spent a doomed refresh against a client the
+                # manufacturer has retired, and only then logged in with the new
+                # password — with the wasted refresh counted by the storm guard
+                # that then pauses the entry. The leftover ``dag_initial_tokens``
+                # is harmless at runtime (it is read only when the store is
+                # empty) but it sits in the diagnostics looking exactly like a
+                # cause, which is how it misled the reporter.
+                #
+                # Scoped to ``_needs_username`` on purpose. That is the entry
+                # which had NO password at all, so there is no password-based
+                # channel here whose tokens could be discarded. An ordinary
+                # Audi, Škoda, SEAT or CUPRA device-login entry never reaches
+                # this branch — it is routed to the code sign-in above — and the
+                # durable MBB channels attach their tokens to entries that
+                # already have a password. Widening this to every entry with a
+                # stored token set would repeat #118 in a new place: throwing
+                # away a refreshable token on every reauth.
+                if _needs_username:
+                    _new_data.pop("dag_initial_tokens", None)
+                    await self._clear_token_store(reauth_entry.entry_id)
                 self.hass.config_entries.async_update_entry(
-                    reauth_entry,
-                    data={
-                        **reauth_entry.data,
-                        CONF_USERNAME: username,
-                        CONF_PASSWORD: password,
-                        CONF_SPIN: spin,
-                        # v4.7.7 (#1337) — bridge a Porsche login token so the
-                        # reload reuses it (refresh) instead of re-logging in.
-                        **({"porsche_initial_tokens": _tok} if _tok else {}),
-                    },
+                    reauth_entry, data=_new_data,
                 )
                 await self._persist_porsche_token_store(reauth_entry.entry_id, _tok)
                 await self.hass.config_entries.async_reload(reauth_entry.entry_id)
@@ -2731,6 +2760,33 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                 ),
             },
         )
+
+    async def _clear_token_store(self, entry_id: str) -> None:
+        """Drop an entry's persisted TokenSet so the next load logs in cleanly.
+
+        Used when a reauth replaces the credentials that minted the stored
+        token, which makes that token not merely stale but unusable. Clearing
+        rather than overwriting because ``_validate_credentials`` only hands
+        back a token set for Porsche; for every other brand there is nothing
+        fresh to save, and an empty store is exactly what makes the coordinator
+        do a clean login on the reload.
+
+        Failures are swallowed by ``TokenStorage.clear`` itself, which is the
+        behaviour we want here: a store that cannot be removed leaves the old
+        bad-token path in place, and that is strictly better than aborting a
+        reauth that has already succeeded against the identity service.
+        """
+        from homeassistant.helpers.storage import Store  # noqa: PLC0415
+
+        from .cariad.auth._token_storage import (  # noqa: PLC0415
+            _STORAGE_VERSION,
+            TokenStorage,
+            storage_key_for_entry,
+        )
+        store: Store[dict[str, Any]] = Store(
+            self.hass, _STORAGE_VERSION, storage_key_for_entry(entry_id)
+        )
+        await TokenStorage(store).clear()
 
     async def async_step_reauth_qr(
         self, user_input: dict[str, Any] | None = None

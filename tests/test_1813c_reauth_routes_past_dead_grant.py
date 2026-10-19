@@ -82,17 +82,36 @@ class TestTheFormAsksForWhatItNeeds:
 
     def test_the_update_writes_the_supplied_username(self):
         """Otherwise the entry keeps the UUID and the next login fails the same
-        way, which would make the whole exercise pointless."""
+        way, which would make the whole exercise pointless.
+
+        Asserted over the whole function rather than over the 600 characters
+        after the update call. The first version measured adjacency, and
+        adjacency is not the property: building the dict in a variable above
+        the call — which #1813's token-store cleanup needed — broke the test
+        while changing nothing about what gets written. What actually pins the
+        behaviour is
+        ``test_1813d_reauth_clears_the_dead_token_store.py::
+        TestAPasswordlessEntryLosesItsDeadTokens::test_the_new_credentials_are_stored``,
+        which drives the step and reads the entry afterwards.
+        """
         src = self._src()
-        update = src[src.index("async_update_entry"):]
-        assert "CONF_USERNAME" in update[:600]
+        assert "CONF_USERNAME: username" in src
 
     def test_the_update_still_merges_rather_than_rebuilds(self):
         """The property that makes reauth the right destination. If this ever
-        becomes a plain dict the entry silently loses its other channels."""
+        becomes a plain dict the entry silently loses its other channels.
+
+        Over the whole function, for the reason given above: the dict is now
+        built in a variable before the call, so measuring the characters after
+        the call measured the refactor rather than the merge. The behavioural
+        counterpart is
+        ``test_1813d_reauth_clears_the_dead_token_store.py::
+        TestAPasswordlessEntryLosesItsDeadTokens::
+        test_everything_else_on_the_entry_survives``, which checks that an
+        unrelated key on the entry is still there afterwards.
+        """
         src = self._src()
-        update = src[src.index("async_update_entry"):]
-        assert "**reauth_entry.data" in update[:400]
+        assert "**reauth_entry.data" in src
 
 
 class TestTheClassifierStillSaysWhatItSaid:
