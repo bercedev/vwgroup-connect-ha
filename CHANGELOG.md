@@ -325,6 +325,31 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   the two things this line must never grow
   ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
 
+- **A refused command now explains itself in the log, not only in the Home
+  Assistant dialog.** @Joassens tested the MBB client-identity refusal on a
+  Passat GTE and confirmed the message reads correctly in the UI — the car's
+  gateway accepted the S-PIN and then refused this integration's client
+  identity, none of it the owner's fault. Then he looked at the log file for the
+  same event and found one line: `command_start_climate(***074295) failed:
+  VehicleCommandError (status=None)`. The whole explanation lived only in the
+  error the UI surfaced, so anyone working from a log — which, when a command
+  fails, is usually the person who was asked to send one — got a class name and
+  a null status.
+
+  The reason a command error carries is now part of that error line. It applies
+  to `VehicleCommandError` alone, because every reason that class carries is
+  prose written for the owner and already shown to them; for every other
+  exception the line still logs the class and HTTP status only. That restriction
+  was already there and stays, but its stated justification was out of date: it
+  said a raw exception string can carry the VIN-bearing command URL, and
+  `APIError` has masked the VIN out of its own message since the #1355 redaction
+  work. What the restriction actually protects against is the arbitrary
+  exceptions that land in the same handler — a network or ADB library error
+  whose text nobody here has vetted. Both halves of that are now pinned by
+  tests, including one that fails if `APIError` ever stops redacting, so the
+  comment above the log line cannot quietly become wrong again
+  ([#584](https://github.com/its-me-prash/vwgroup-connect-ha/issues/584)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
