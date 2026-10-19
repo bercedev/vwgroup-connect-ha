@@ -55,6 +55,66 @@ workflow enforces this.
 - short description of the change
 ```
 
+### Add the entry with the script, not with a block rewrite
+
+```bash
+python scripts/add_changelog_entry.py --section fixed --text-file entry.md
+python scripts/add_changelog_entry.py --section added --dry-run --text "- **…**"
+```
+
+`add_changelog_entry.py` inserts one entry at the end of its section and
+touches nothing else — it refuses to write if a single existing line would be
+removed or altered. That matters because of how the block is *usually* edited:
+rewriting the whole `[Unreleased]` block makes git see one large change on each
+branch instead of two small additions in different places, so two branches
+overlap and resolving the conflict means one side's entries go with it. Twice in
+one day that nearly cost an entry — once a duplicated `### Behoben / Fixed`
+heading left by a merge, once main's whole `### Hinzugefügt / Added` section
+dropped by a side-pick. Inserting per section merges cleanly in that case
+(measured); the same section still conflicts, but over two lines whose union is
+obviously both.
+
+`check_changelog_structure.py` is the net under it. In `changelog_check.yml` it
+runs two checks on every pull request that touches `CHANGELOG.md`: no conflict
+marker anywhere, and no duplicate section heading inside `[Unreleased]` —
+counted by what a heading *means*, so `### Fixed` beside `### Behoben / Fixed`
+is one section twice and not two sections. Three of the last 80 revisions of
+this file on main really were in that state.
+
+```bash
+python scripts/check_changelog_structure.py            # what CI runs
+```
+
+A third check — *no entry that was in the baseline has vanished* — exists
+behind `--base` / `--baseline-file` and is deliberately **not** in CI. Measured
+against this file's own history, each commit against its real parent, it would
+have refused five of the last 80 revisions and **none of the five had lost
+anything**: every one was an entry whose bold title had been rewritten, one of
+them by inserting an issue number into the title, which is exactly what this
+document asks for. Over the same window it caught zero real losses, while the
+duplicate-heading check caught three with no false alarm. The cause is
+structural: 516 of the 819 entries cite no issue number, so they are keyed by
+their title and a reword is indistinguishable from a deletion. A required check
+that refuses legitimate work and has never caught damage gets a `--skip` added
+to it and then protects nothing.
+
+So run it deliberately, which means after resolving a changelog conflict:
+
+```bash
+python scripts/check_changelog_structure.py --base origin/main
+```
+
+Know both of its blind spots before you trust it. An entry whose issue number
+is also cited by another entry can be deleted without it reporting anything —
+322 of 985 entries today, 6 of the 12 in the Unreleased block. And it will
+accuse you of deleting an entry you only reworded; in the Unreleased block that
+is one entry of thirteen today, since the other twelve cite an issue. It is a
+second pair of eyes, not a guarantee. The guarantee is that
+`add_changelog_entry.py` never rewrites the block.
+
+Neither script checks section order or vocabulary, on purpose: this file has
+used 31 distinct headings and keeps past entries as written.
+
 ## Language convention (v2.4.1+ — EN-primary, switched 2026-05-23)
 
 CHANGELOG entries + release notes + GH release titles use **English as
