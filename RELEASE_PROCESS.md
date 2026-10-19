@@ -74,16 +74,38 @@ dropped by a side-pick. Inserting per section merges cleanly in that case
 (measured); the same section still conflicts, but over two lines whose union is
 obviously both.
 
-`check_changelog_structure.py` is the net under it, and runs on every pull
-request in `changelog_check.yml`. It refuses a file with a conflict marker, a
-duplicate `###` heading inside `[Unreleased]`, or an entry that exists in
-`origin/main` and has vanished. It deliberately does **not** check section order
-or vocabulary — this file has used 31 distinct headings and keeps past entries
-as written. Run it by hand the same way CI does:
+`check_changelog_structure.py` is the net under it. In `changelog_check.yml` it
+runs two checks on every pull request that touches `CHANGELOG.md`: no conflict
+marker anywhere, and no duplicate section heading inside `[Unreleased]` —
+counted by what a heading *means*, so `### Fixed` beside `### Behoben / Fixed`
+is one section twice and not two sections. Three of the last 80 revisions of
+this file on main really were in that state.
+
+```bash
+python scripts/check_changelog_structure.py            # what CI runs
+```
+
+A third check — *no entry that was in the baseline has vanished* — exists
+behind `--base` / `--baseline-file` and is deliberately **not** in CI. Measured
+against this file's own history it would have refused 18 of the last 79 commits
+to it, 14 of them purely because a bold title had been copy-edited: 516 of the
+819 entries cite no issue number, so they are keyed by their title and a reword
+is indistinguishable from a deletion. A required check that refuses close to
+one pull request in five gets a `--skip` added to it and then protects nothing.
+
+So run it deliberately, which means after resolving a changelog conflict:
 
 ```bash
 python scripts/check_changelog_structure.py --base origin/main
 ```
+
+Know its blind spot before you trust it: an entry whose issue number is also
+cited by another entry can be deleted without it reporting anything — 322 of
+985 entries today. It is a second pair of eyes, not a guarantee. The guarantee
+is that `add_changelog_entry.py` never rewrites the block.
+
+Neither script checks section order or vocabulary, on purpose: this file has
+used 31 distinct headings and keeps past entries as written.
 
 ## Language convention (v2.4.1+ — EN-primary, switched 2026-05-23)
 

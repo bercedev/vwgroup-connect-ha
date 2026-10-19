@@ -39,6 +39,11 @@ import sys
 from pathlib import Path
 
 _UNRELEASED = "## [Unreleased]"
+#: Anchored to column 0 for the same reason as in the checker: a sentence that
+#: merely names the heading is not the heading. Unanchored, prose above the real
+#: block becomes the block's start, and the entry is then written ABOVE the
+#: heading instead of inside it.
+_UNRELEASED_RE = re.compile(r"^## +\[Unreleased\]", re.M)
 _RELEASE = re.compile(r"^## +\[.+?\]", re.M)
 _SECTION = re.compile(r"^### +(.+?)\s*$", re.M)
 
@@ -59,11 +64,22 @@ SECTIONS: dict[str, str] = {
 #: next to it — which is exactly the duplicate the checker refuses.
 ALIASES: dict[str, str] = {}
 for _slot, _heading in SECTIONS.items():
-    ALIASES[_heading.casefold()] = _slot
-    ALIASES[_slot] = _slot
     german, english = (p.strip() for p in _heading.split("/"))
-    ALIASES[german.casefold()] = _slot
-    ALIASES[english.casefold()] = _slot
+    for _spelling in (
+        _heading,                    # "Behoben / Fixed"
+        f"{english} / {german}",     # "Fixed / Behoben" — the EN-primary order
+        german,                      # "Behoben"
+        english,                     # "Fixed"
+    ):
+        ALIASES[_spelling.casefold()] = _slot
+    ALIASES[_slot] = _slot
+# Both orders are deliberate, not defensive. This file's own header switched the
+# convention to English-primary at v2.4.1, and its history carries 176 English-
+# only headings against 5 bilingual ones, so the heading an existing section
+# wears is genuinely not predictable. A spelling that does not alias to its slot
+# would make this script open a SECOND heading for a section already present —
+# the exact duplicate the checker refuses, produced by the tool meant to prevent
+# it.
 
 _ORDER = list(SECTIONS)
 
@@ -79,9 +95,14 @@ def _p(text: object) -> str:
 
 
 def block_bounds(text: str) -> tuple[int, int]:
-    start = text.index(_UNRELEASED)
-    nxt = _RELEASE.search(text, start + len(_UNRELEASED))
-    return start, (nxt.start() if nxt else len(text))
+    m = _UNRELEASED_RE.search(text)
+    if m is None:  # main() refuses before this; belt and braces for callers
+        raise ValueError(f'no "{_UNRELEASED}" heading at the start of a line')
+    # Search from the END of the heading: _RELEASE also matches
+    # "## [Unreleased]", so starting any earlier finds this heading again and
+    # makes the block empty.
+    nxt = _RELEASE.search(text, m.end())
+    return m.start(), (nxt.start() if nxt else len(text))
 
 
 def insert(text: str, slot: str, entry: str) -> str:
@@ -111,8 +132,15 @@ def insert(text: str, slot: str, entry: str) -> str:
             return text[: b0 + pos] + head + text[b0 + pos :]
 
     cut = len(block.rstrip())
-    tail = f"\n\n### {SECTIONS[slot]}\n\n{entry}\n"
-    return text[: b0 + cut] + tail + text[b0 + cut :]
+    rest = text[b0 + cut :]
+    # No trailing "\n" on the tail: ``rest`` already carries the block's
+    # preserved trailing whitespace, so adding one leaves a double blank line
+    # before the next release heading. The other two branches rely on that same
+    # preserved tail, which is why neither produces the artefact. The
+    # ``or "\n"`` matters: when Unreleased is the last block and the file has no
+    # final newline, ``rest`` is empty and today's code normalises it to one.
+    tail = f"\n\n### {SECTIONS[slot]}\n\n{entry}"
+    return text[: b0 + cut] + tail + (rest or "\n")
 
 
 def assert_insert_only(before: str, after: str) -> None:
@@ -159,13 +187,54 @@ def main(argv: list[str] | None = None) -> int:
     else:
         entry = args.text
 
-    if not entry.strip().startswith("- **"):
+    # The --text-file and stdin paths get universal newlines for free; --text
+    # does not, so a CR arriving through a shell variable (PowerShell's
+    # Get-Content -Raw is the obvious producer here) was written into the file
+    # verbatim. Against a CRLF working copy that yields literal "\r\r\n" bytes,
+    # which no gate in this project can see: the checker reads with universal
+    # newlines, so it cannot observe a CR at all, and git normalises the diff.
+    # One silent, permanent corruption. This makes --text behave like the two
+    # paths that were already right rather than adding a rule; the second
+    # replace is load-bearing for the lone trailing CR that strip("\n") leaves.
+    entry = entry.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Tightened from ``startswith("- **")``, which accepted an UNCLOSED bold
+    # marker — and an entry with no closing "**" is exactly what the checker
+    # cannot see, so the gate's own message ("invisible to the check that would
+    # notice it going missing") was describing something it let through. re.S is
+    # required: a real title may wrap over several lines.
+    if not re.match(r"- \*\*.+?\*\*", entry.strip(), re.S):
         print(
             _p(
-                'Refusing: an entry opens with "- **" and a bold title. Every '
-                "entry in this file does, and the structure checker identifies "
-                "entries by it — one written another way is invisible to the "
-                "check that would notice it going missing."
+                'Refusing: an entry opens with "- **" and a bold title that is '
+                "closed again. Every entry in this file does, and the structure "
+                "checker identifies entries by it — one written another way is "
+                "invisible to the check that would notice it going missing."
+            )
+        )
+        return 2
+
+    # An entry is written into the block verbatim, so a heading inside it is a
+    # heading in the file. Three distinct outcomes, and only the first is loud:
+    # a "### " matching the section being added to duplicates that heading and
+    # the checker refuses the result; a "### " in any OTHER spelling opens a
+    # bogus parallel section that both scripts pass, because the checker
+    # deliberately does not police section vocabulary; and a "## [" splits the
+    # Unreleased block in two, so everything after it falls outside the block
+    # and check 2 silently inspects less than it reports.
+    #
+    # This reuses the two patterns already compiled above rather than inventing
+    # a rule: measured against every entry body in the file, ``^#{1,6}`` would
+    # reject four legitimate entries that use "#### " sub-headings, while these
+    # two reject none of 985.
+    if _SECTION.search(entry) or _RELEASE.search(entry):
+        print(
+            _p(
+                'Refusing: the entry text carries a "### " section heading or a '
+                '"## [...]" release heading. The entry goes into the block '
+                "verbatim, so a heading inside it opens a second section beside "
+                "the one being added to, or splits the Unreleased block in two. "
+                'Add one entry per run; a multi-part entry uses "#### ".'
             )
         )
         return 2
@@ -182,7 +251,7 @@ def main(argv: list[str] | None = None) -> int:
     crlf = raw.count(b"\r\n")
     newline = "\r\n" if crlf > (raw.count(b"\n") - crlf) else "\n"
     before = raw.decode("utf-8").replace("\r\n", "\n")
-    if _UNRELEASED not in before:
+    if not _UNRELEASED_RE.search(before):
         print(_p(f'Refusing: {path} has no "{_UNRELEASED}" block to add to.'))
         return 2
 
