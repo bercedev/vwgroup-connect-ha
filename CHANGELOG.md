@@ -294,6 +294,37 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   Škoda, SEAT and CUPRA the same kind of token is the normal durable channel
   ([#1813](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1813)).
 
+- **A "portal session expired" notice no longer survives the sign-in that fixed
+  it.** The notice asks you to sign in again, and data arriving through the
+  portal afterwards is the proof that you did — but clearing it also required a
+  flag that only existed on the object which had raised it, and reloading the
+  entry replaces that object while the notice itself persists. So anyone who
+  reloaded, or whose entry was reloaded for them, kept being told their session
+  had expired while their car was updating normally. The clear now rests on the
+  evidence alone. Found by @Anoxym, who read the code and sent the sequence
+  rather than the symptom ([#1867](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1867)).
+
+- **A SEAT or CUPRA entry reading through the portal stops being nagged about an
+  access path it no longer uses.** The notice about outdated app headers is
+  cleared for a portal-served entry, and has been since 4.7.x — but only from
+  inside the polling loop, so an entry whose poll does not complete kept the
+  notice for as long as the entry existed. @georghaberkorn68-ctrl reported one
+  standing at 535 since August, next to a car whose data was arriving fine. It
+  is now also cleared when the entry starts up. An entry that is *not* reading
+  through the portal keeps its notice, including across a restart: a real
+  access problem should not blink out and come back
+  ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
+
+- **When the SEAT/CUPRA user lookup fails, the log now says what happened.** It
+  used to print one sentence with nothing in it, so a refused request, a
+  forbidden one, a timeout and a malformed answer were indistinguishable — and
+  @georghaberkorn68-ctrl spent a twelve-minute debug capture on a question that
+  no log this code could produce was able to answer. The exception and, where
+  there is one, the HTTP status are now named. Deliberately nothing else: that
+  error object also holds the request address and the response body, which are
+  the two things this line must never grow
+  ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a

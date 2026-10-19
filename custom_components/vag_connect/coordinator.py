@@ -2310,6 +2310,13 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                         self._companion_app_sync_loop(), f"{DOMAIN}_app_sync"
                     )
 
+            # #1866 — clear a stale SEAT/CUPRA OLA repair here, not only in the
+            # poll loop. An entry serving through the portal carried one at a
+            # count of 535 since August because the only clear path sat behind a
+            # completed poll iteration it never reached. Portal branch only; the
+            # helper's docstring says why the rest waits for a poll.
+            self._reconcile_ola_repair(at_setup=True)
+
             self.hass.async_create_background_task(
                 _bg_finish(), f"{DOMAIN}_setup_finish"
             )
@@ -3255,11 +3262,14 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         """
         from homeassistant.helpers import issue_registry as ir  # noqa: PLC0415
 
-        # v4.7.8 — remember that we raised it, so the per-poll repair refresh
-        # can clear it again once the portal session is demonstrably alive
-        # (data flowed). Before this the Repair was never deleted at all: a
-        # user who re-logged in kept seeing "session expired" forever.
-        self._data_act_session_expired_pending = True
+        # v4.7.8 remembered here that we had raised it, so the per-poll refresh
+        # could clear it again once the portal session was demonstrably alive.
+        # #1867 removed that: the flag lived on this coordinator instance while
+        # the repair lives in Home Assistant's issue registry, so a reload left
+        # the repair with nothing able to delete it. The clear now keys on the
+        # evidence alone — data flowing through the portal — and needs no
+        # memory of who raised it. Nothing is recorded here on purpose; a
+        # write-only attribute reads like state that matters.
         ir.async_create_issue(
             self.hass,
             DOMAIN,
@@ -3394,15 +3404,25 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         # is proof the session is alive again → clear it. Deliberately NOT
         # cleared on a no-data poll: the kickoff can raise it mid-cycle and the
         # same cycle's empty dataset must not immediately erase it.
-        if (
-            portal is not None
-            and not reason
-            and getattr(self, "_data_act_session_expired_pending", False)
-        ):
+        #
+        # #1867 (@Anoxym) — this used to require ``_data_act_session_expired_
+        # pending`` as well, an attribute set on the coordinator instance that
+        # raised the repair. A reload builds a new coordinator, so the new
+        # instance answered False, while the repair itself lives in Home
+        # Assistant's issue registry and survives the reload. The repair
+        # therefore outlived every object able to delete it, and a user who had
+        # signed in again kept being told their session was expired.
+        #
+        # The attribute was never part of the proof — data flowing through the
+        # portal is just as good on the second instance as on the first. It was
+        # there to avoid calling delete on every poll, and deleting an issue
+        # that does not exist is a no-op, so it was saving nothing and costing
+        # the reload. ``not reason`` is the condition that carries meaning and
+        # it stays.
+        if portal is not None and not reason:
             ir.async_delete_issue(
                 self.hass, DOMAIN, f"data_act_session_expired_{entry_id}"
             )
-            self._data_act_session_expired_pending = False
         if portal is None or not reason:
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)
             return
@@ -9166,9 +9186,27 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         )
         return bool(identifiers)
 
-    def _reconcile_ola_repair(self) -> None:
+    def _reconcile_ola_repair(self, *, at_setup: bool = False) -> None:
         """Raise/clear the SEAT/CUPRA ``ola_headers_outdated`` Repair from the
         client's persistent-403 counter (#281/#282), with a portal-mode guard.
+
+        ``at_setup`` runs ONLY the portal-mode clear below, and exists because
+        the fix this docstring describes could not be reached from where it was
+        needed. #1866 (@georghaberkorn68-ctrl): a CUPRA entry serving its data
+        through the portal carried this repair at a count of 535 since August.
+        The portal-mode auto-resolve was working — it simply lives in the poll
+        loop, which is the one place his entry does not get to, and nothing else
+        in the integration clears that repair. So it froze "on" exactly as
+        #1301 describes, one level further out.
+
+        Why the setup call is narrowed to the portal branch rather than running
+        the whole reconcile: at setup the client is new, so its counters are
+        zero, and the "no history, clear it" branch would fire for every entry
+        on every restart — including one whose OLA access really is revoked,
+        whose repair would then vanish at each restart and come back after the
+        first poll. Flicker on a real problem is a worse trade than a stale
+        repair on a moot one. The portal branch has no such ambiguity: #1301
+        already decided that a portal-served entry's OLA history is moot.
 
         #1301 (@anju1337): SEAT/CUPRA OLA is server-side revoked. Once an entry
         reads via the EU Data Act portal, ``get_vehicles`` / ``get_status``
@@ -9194,10 +9232,18 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 raise_issue_ola_headers_outdated,
             )
             if portal_active:
-                if ola_flag or consecutive_403:
-                    clear_ola_headers_issue(self.hass, self.entry.entry_id)
-                    setattr(client, "ola_headers_repair_needed", False)
-                    setattr(client, "_ola_consecutive_403", 0)
+                # #1866 — at setup the counters are zero on a fresh client, so
+                # the old `if ola_flag or consecutive_403` guard skipped the
+                # clear on exactly the entry that needed it: the repair is in
+                # HA's issue registry and outlives the client whose counters
+                # raised it. Deleting an issue that is not there is a no-op, so
+                # the guard was only ever saving a no-op call.
+                clear_ola_headers_issue(self.hass, self.entry.entry_id)
+                setattr(client, "ola_headers_repair_needed", False)
+                setattr(client, "_ola_consecutive_403", 0)
+            elif at_setup:
+                # Nothing else is decided at setup — see the docstring.
+                return
             elif ola_flag and consecutive_403 > 0:
                 raise_issue_ola_headers_outdated(
                     self.hass, self.entry.entry_id,
