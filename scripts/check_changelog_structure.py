@@ -28,27 +28,40 @@ A third check — "no entry that exists in the baseline has vanished" — is
 available through ``--base`` / ``--baseline-file`` but is deliberately NOT part
 of the CI job, and that decision is the most important thing in this file.
 
-Replayed over the last 79 consecutive commit pairs of this file on main, it
-would have refused **18** of them, and **14** of those purely because a bold
-title had been copy-edited. The reason is structural rather than fixable: an
-entry's identity has to be read out of its own text, 516 of the 819 identified
-entries cite no issue number at all and are therefore keyed by their title, so
-ordinary rewording is indistinguishable from deletion. Tightening it the other
-way is no better — keying by issue number alone collapses entries that share
-one, and then a deletion leaves no trace.
+Replayed over the last 80 revisions of this file on main, each commit against
+its real parent, it would have refused **five** of them — and **none** of those
+five had lost anything. Every one was an entry whose bold title had been
+rewritten, confirmed by reading each diff: a title reordered, one shortened,
+two expanded, and one where an issue number was inserted into the title, which
+is precisely what RELEASE_PROCESS.md asks an author to do. Over the same 80
+revisions it caught **zero** real losses, while the duplicate-heading check
+caught three with no false alarm.
 
-A required check that refuses close to one pull request in five is worse than
-no check at all, because what happens next is that someone adds a ``--skip``
-and it protects nothing for ever. So it is a diagnostic you run when you have a
-reason to, not a gate. Run it after resolving a changelog conflict, which is
-when incident (b) happened:
+The reason is structural rather than fixable: an entry's identity has to be
+read out of its own text, 516 of the 819 identified entries cite no issue
+number at all and are therefore keyed by their title, so ordinary rewording is
+indistinguishable from deletion. Tightening it the other way is no better —
+keying by issue number alone collapses entries that share one, and then a
+deletion leaves no trace.
+
+A required check that refuses legitimate work and has never caught damage is
+worse than no check at all, because what happens next is that someone adds a
+``--skip`` and it protects nothing for ever. So it is a diagnostic you run when
+you have a reason to, not a gate. Run it after resolving a changelog conflict,
+which is when incident (b) happened:
 
     python scripts/check_changelog_structure.py --base origin/main
 
 Its blind spot, stated plainly rather than discovered later: an entry whose
 issue number is also cited by another entry can be deleted without this
-reporting it. On the current file that is a large share of them. Incident (b)
-itself IS caught, because that entry's number was unique.
+reporting it — 322 of 985 entries today, and 6 of the 12 in the Unreleased
+block. Incident (b) itself IS caught, because that entry's number was unique.
+
+The other half of the same coin, for reading its output rather than its code:
+it will accuse you of deleting an entry you only reworded. In the Unreleased
+block that is currently one entry of thirteen, because the other twelve cite an
+issue; across the whole file it is 516 of 819. So a report naming a title you
+recognise as something you edited is the expected false alarm, not a finding.
 
 Incident (b) is prevented at the cause instead, by
 ``scripts/add_changelog_entry.py``: it inserts one entry at the end of its
@@ -261,9 +274,18 @@ def check(text: str, baseline: str | None) -> list[str]:
 
     block = unreleased_block(text)
     if not block:
+        # The message used to say a release in progress "is fine", while the
+        # function put it in `problems` and returned 1. A check whose text
+        # contradicts its own exit code teaches the reader to ignore the text.
+        # The behaviour is right and stays: this project's release step adds a
+        # fresh empty block above the new version (RELEASE_PROCESS.md), so a
+        # file with no such heading at column 0 is a mistake and not a stage of
+        # the process.
         problems.append(
-            f'no "{_UNRELEASED}" block - a release in progress is fine, but '
-            "check this is intended"
+            f'there is no "{_UNRELEASED}" heading at the start of a line. The '
+            "release step adds a fresh empty one above the new version, so a "
+            "file without it has lost it — restore the heading, keeping any "
+            "entries that were under it."
         )
     else:
         found = [m.group(1) for m in _SECTION.finditer(block)]

@@ -87,11 +87,16 @@ python scripts/check_changelog_structure.py            # what CI runs
 
 A third check — *no entry that was in the baseline has vanished* — exists
 behind `--base` / `--baseline-file` and is deliberately **not** in CI. Measured
-against this file's own history it would have refused 18 of the last 79 commits
-to it, 14 of them purely because a bold title had been copy-edited: 516 of the
-819 entries cite no issue number, so they are keyed by their title and a reword
-is indistinguishable from a deletion. A required check that refuses close to
-one pull request in five gets a `--skip` added to it and then protects nothing.
+against this file's own history, each commit against its real parent, it would
+have refused five of the last 80 revisions and **none of the five had lost
+anything**: every one was an entry whose bold title had been rewritten, one of
+them by inserting an issue number into the title, which is exactly what this
+document asks for. Over the same window it caught zero real losses, while the
+duplicate-heading check caught three with no false alarm. The cause is
+structural: 516 of the 819 entries cite no issue number, so they are keyed by
+their title and a reword is indistinguishable from a deletion. A required check
+that refuses legitimate work and has never caught damage gets a `--skip` added
+to it and then protects nothing.
 
 So run it deliberately, which means after resolving a changelog conflict:
 
@@ -99,10 +104,13 @@ So run it deliberately, which means after resolving a changelog conflict:
 python scripts/check_changelog_structure.py --base origin/main
 ```
 
-Know its blind spot before you trust it: an entry whose issue number is also
-cited by another entry can be deleted without it reporting anything — 322 of
-985 entries today. It is a second pair of eyes, not a guarantee. The guarantee
-is that `add_changelog_entry.py` never rewrites the block.
+Know both of its blind spots before you trust it. An entry whose issue number
+is also cited by another entry can be deleted without it reporting anything —
+322 of 985 entries today, 6 of the 12 in the Unreleased block. And it will
+accuse you of deleting an entry you only reworded; in the Unreleased block that
+is one entry of thirteen today, since the other twelve cite an issue. It is a
+second pair of eyes, not a guarantee. The guarantee is that
+`add_changelog_entry.py` never rewrites the block.
 
 Neither script checks section order or vocabulary, on purpose: this file has
 used 31 distinct headings and keeps past entries as written.

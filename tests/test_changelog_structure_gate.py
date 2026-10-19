@@ -487,11 +487,15 @@ class TestTwoSpellingsOfOneSectionAreOneSection:
 class TestTheCiJobGatesOnlyWhatItCan:
     """Encodes the decision rather than relying on someone remembering it.
 
-    The lost-entry comparison was measured against this file's own history: it
-    would have refused 18 of the last 79 commits to it, 14 purely because a
-    bold title was copy-edited. A required check that refuses close to one pull
-    request in five gets a ``--skip`` added to it and then protects nothing, so
-    it must not be wired into CI — and the next person to reach for ``--base``
+    The lost-entry comparison was measured against this file's own history,
+    each commit against its real parent: it would have refused five of the last
+    80 revisions, and none of the five had lost anything — every one was an
+    entry whose bold title had been rewritten, one of them by inserting an
+    issue number into the title, which RELEASE_PROCESS.md asks for. Zero real
+    losses caught in that window; the duplicate-heading check caught three with
+    no false alarm. A required check that refuses legitimate work and has never
+    caught damage gets a ``--skip`` added to it and then protects nothing, so it
+    must not be wired into CI — and the next person to reach for ``--base``
     there should be stopped by a failing test rather than by a comment.
     """
 
@@ -572,6 +576,19 @@ class TestTheOriginalChecksStillHold:
         )
         code, out = _run(_CHECKER, "--file", str(live), "--baseline-file", str(base))
         assert code == 0, out
+
+    def test_a_missing_unreleased_heading_says_it_is_refused(self, tmp_path: Path):
+        """The message used to say a release in progress "is fine" while the
+        function put it in ``problems`` and returned 1. A check whose text
+        contradicts its own exit code teaches the reader to ignore the text."""
+        live = tmp_path / "CHANGELOG.md"
+        live.write_text(
+            MIN.replace("## [Unreleased]\n", ""), encoding="utf-8", newline="\n",
+        )
+        code, out = _run(_CHECKER, "--file", str(live))
+        assert code == 1
+        assert "is fine" not in out, "it refuses the file while calling it fine"
+        assert "no " in out.lower() and "Unreleased" in out
 
     def test_an_unreadable_base_ref_refuses_rather_than_skipping(self):
         code, out = _run(_CHECKER, "--base", "no-such-ref-exists-here")
