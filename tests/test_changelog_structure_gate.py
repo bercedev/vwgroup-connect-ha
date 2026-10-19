@@ -233,7 +233,13 @@ class TestTheWriterRejectsHeadingsInsideAnEntry:
             hard = len(text) if i + 1 >= len(starts) else starts[i + 1]
             nxt = re.compile(r"^(?:### |## )", re.M).search(text, s + 3)
             bodies.append(text[s:min(hard, nxt.start() if nxt else hard)])
-        assert len(bodies) == 985, f"instrument drifted: {len(bodies)} bodies"
+        # Self-consistent rather than a hardcoded count: one body per entry
+        # line. A literal number here fails the first time anyone adds an
+        # entry, which is what happened — and it would have read as "the rule
+        # rejects a real entry" rather than "the test counted yesterday's file".
+        assert len(bodies) == sum(
+            1 for ln in text.splitlines() if ln.startswith("- **")
+        ), f"instrument drifted: {len(bodies)} bodies"
         rejected = [
             b for b in bodies
             if wri._SECTION.search(b) or wri._RELEASE.search(b)

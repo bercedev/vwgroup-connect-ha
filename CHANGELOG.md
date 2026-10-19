@@ -281,6 +281,19 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   integration now says so in every shipped language instead of blaming your password. Measured on an Audi e-tron 50 quattro, MY2022, and
   contributed by @woifh (#1712).
 
+- **Signing in again with an e-mail address and a password now discards the
+  expired sign-in it replaces.** On an entry first set up with the brand app's
+  code sign-in, the old token was kept in two places and neither was replaced,
+  so the reload spent a refresh attempt on a sign-in the manufacturer has
+  retired before it got round to using the new password — and that wasted
+  attempt counted towards the pause that protects the account from being
+  rate-limited. The leftover was also still listed in the diagnostics
+  afterwards, where it looked exactly like the cause of the failure that
+  followed; @ratclma spotted it there and asked the right question about it.
+  Entries that do have a password keep their stored tokens, because for Audi,
+  Škoda, SEAT and CUPRA the same kind of token is the normal durable channel
+  ([#1813](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1813)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
