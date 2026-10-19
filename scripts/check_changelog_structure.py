@@ -236,6 +236,23 @@ def entry_keys(text: str) -> dict[str, str]:
     return keys
 
 
+#: A third limit, recorded because the obvious fix makes things worse.
+#:
+#: An entry's body runs to the next entry or heading, so a paragraph sitting
+#: between two entries is absorbed into the one above it and donates its issue
+#: number to that entry — after which the entry which really owns the number can
+#: be deleted unnoticed.
+#:
+#: Narrowing the body to the entry's FIRST paragraph is the tempting fix, and it
+#: is wrong here. Measured on the file: 20 of 986 entries span more than one
+#: paragraph (up to eleven), and for five of them the issue number appears only
+#: in a later paragraph. Narrowing would strip those five of their issue key and
+#: leave them identified by their title, which is the fragile kind — so the fix
+#: would make five real entries easier to lose in order to close a case that
+#: needs a stray paragraph belonging to no entry, something this file does not
+#: contain. Left as it is, on purpose.
+
+
 def _git_show(ref: str, path: str) -> str | None:
     try:
         r = subprocess.run(
