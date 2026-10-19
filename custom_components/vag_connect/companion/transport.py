@@ -24,6 +24,11 @@ _LOGGER = logging.getLogger(__name__)
 # uiautomator writes the dump here, then we read it back over the same shell.
 _DUMP_PATH = "/sdcard/vag_connect_ui.xml"
 
+# How long to wait before the single dump retry in ``dump_ui``. Long enough for
+# a transition or a toast to finish (uiautomator's own idle wait is ~1.5 s),
+# short enough that a failing read still fails inside one poll.
+_DUMP_RETRY_DELAY_S = 1.5
+
 # Where adb-shell persists the RSA keypair that authorises this HA instance to
 # the phone (the phone shows the "allow USB debugging" prompt once, then trusts
 # this key). Kept under the config dir so it survives restarts.
@@ -222,17 +227,39 @@ class NetworkAdbTransport:
         # dump into an honest no-data (empty cat, guard raises) instead.
         # One shell round trip for all three steps; the dump itself (~1.5 s,
         # uiautomator waits for the UI to go idle) is the cost that remains.
-        xml = await self.shell(
+        cmd = (
             f"rm -f {_DUMP_PATH}; uiautomator dump {_DUMP_PATH} >/dev/null; "
-            f"cat {_DUMP_PATH}",
-            timeout_s,
+            f"cat {_DUMP_PATH}"
         )
+        xml = await self.shell(cmd, timeout_s)
         if "<hierarchy" not in xml:
-            raise CompanionTransportError(
-                "uiautomator returned no screen dump; the phone may be asleep, "
-                "the app may not be in the foreground, or the screen may be "
-                "secured"
+            # ONE retry, then give up. The failure backoff above this is 30
+            # minutes doubling to six hours, and an empty dump used to buy it
+            # outright. But `uiautomator dump` gives up when the UI does not go
+            # idle, and an animation or a transient toast is enough — a
+            # condition that is gone a second later. Three seconds of retry
+            # against half an hour of blindness is not a close trade.
+            #
+            # The whole command is re-run, not just the `cat`: the `rm -f`
+            # above is what stops a failed dump returning the PREVIOUS run's
+            # XML, and a retry that skipped it would reintroduce exactly the
+            # stale-screen bug the rm was added for.
+            #
+            # A `shell` that RAISES is not retried. It has already dropped the
+            # device so the next read reconnects, and a second attempt here
+            # would only report "not connected" over the real reason.
+            _LOGGER.debug(
+                "companion: empty screen dump, retrying once in %.1fs",
+                _DUMP_RETRY_DELAY_S,
             )
+            await asyncio.sleep(_DUMP_RETRY_DELAY_S)
+            xml = await self.shell(cmd, timeout_s)
+            if "<hierarchy" not in xml:
+                raise CompanionTransportError(
+                    "uiautomator returned no screen dump twice; the phone may "
+                    "be asleep, the app may not be in the foreground, or the "
+                    "screen may be secured"
+                )
         return xml
 
     async def foreground_app(self, package: str, timeout_s: float = 10.0) -> None:

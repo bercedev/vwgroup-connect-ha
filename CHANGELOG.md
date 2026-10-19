@@ -325,6 +325,38 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   the two things this line must never grow
   ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
 
+- **A Companion screen that could not be read is no longer reported as a screen
+  with nothing on it, and one failed read no longer costs half an hour of
+  them.** Two defects of the same shape, found by reading the three Companion
+  transports against each other.
+
+  The direct-ADB transport has refused a screen dump with no node tree in it
+  since v2.26.0, because a failed `uiautomator` run leaves its output file
+  untouched and the previous screen would otherwise be parsed as the live one.
+  The phone-agent relay overrode that method and returned whatever the agent
+  sent, so an agent that walked the accessibility tree and found no window —
+  display off, a secure screen, the car app not in front — reported success with
+  nothing in it. Zero nodes is what the read path treats as a car that had
+  nothing to say: the overview anchor check is skipped, the adaptive failure
+  backoff is reset, and the poll is recorded as healthy. The one outcome that
+  most needed to be visible was the only one that left no trace anywhere. The
+  relay now applies the same guard as its sibling.
+
+  And on the ADB side a single empty dump bought the full failure backoff — 30
+  minutes, doubling per consecutive failure to six hours — with no second
+  attempt. But `uiautomator dump` gives up when the screen does not go idle,
+  and an animation or a passing toast is enough to cause that; it is gone a
+  second later. The dump is now retried once, after a short settle, before it
+  becomes a failure, and the error says it tried twice. Three deliberate limits:
+  the retry re-runs the whole command rather than only re-reading the dump file,
+  so the stale-screen protection stays intact; a transport error is **not**
+  retried, because the connection has already been dropped for the next read to
+  rebuild and a second attempt could only report "not connected" over the real
+  reason; and the healthy path still costs exactly one round trip. On the relay
+  there is no retry, because another attempt there means another trip through
+  the agent's own poll and the usual cause of an empty tree does not change in
+  that time.
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
