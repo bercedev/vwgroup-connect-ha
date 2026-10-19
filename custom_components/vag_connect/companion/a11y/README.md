@@ -18,11 +18,20 @@ no gestures, no device pixels.
 ## Build
 
 ```sh
+mkdir -p out
 java -jar ecj-3.33.0.jar -8 -nowarn -d cls A11yTree.java
 java -cp r8.jar com.android.tools.r8.D8 --release --min-api 26 --output out cls/A11yTree.class
-cp out/classes.dex a11y_tree.dex
-sha256sum a11y_tree.dex   # must match A11Y_DEX_SHA256 in companion/transport.py
+sha256sum out/classes.dex
 ```
 
-ecj 3.33.0 (Eclipse compiler) and r8/D8 8.5.35 were used. Any Java 8 compiler and
-D8 produce an equivalent dex; update the hash in `transport.py` when rebuilding.
+With ecj 3.33.0 (Eclipse compiler) and r8/D8 8.5.35, this reproduces the
+committed `a11y_tree.dex` byte for byte, and the digest is `A11Y_DEX_SHA256` in
+`companion/transport.py` (checked here with Temurin 17 running both jars).
+Another compiler or D8 version gives a dex that does the same thing but has a
+different digest.
+
+The pin is a seal on the committed file, not on the build: `transport.py`
+refuses to push any dex whose digest differs, and a test checks the committed
+file against it. When changing `A11yTree.java`, rebuild, copy
+`out/classes.dex` to `a11y_tree.dex`, and record its new digest in
+`A11Y_DEX_SHA256`.

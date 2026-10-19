@@ -1,3 +1,6 @@
+// Copyright 2026 Gyorgy Szigethy (@gszigethy) — GNU AGPL v3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.util.List;

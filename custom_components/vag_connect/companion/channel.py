@@ -997,7 +997,6 @@ class CompanionChannel:
         extra: dict[str, object] | None = None,
     ) -> None:
         values = read_selectors(detail, nav.values)
-        values.update(extra or {})
         if self._preset.brand == "volkswagen" and nav.name == "charge_detail":
             values.update(read_battery_resources(detail, self._app_strings))
         if self._preset.brand == "volkswagen" and nav.name == "vehicle_health":
@@ -1006,6 +1005,9 @@ class CompanionChannel:
             values.update(read_settings_resources(detail, self._app_strings))
         if self._preset.brand == "volkswagen" and nav.name == "departure_times":
             values.update(read_departure_timers(detail, self._app_strings))
+        # After the list: a timer page's day buttons (4.6.4) are stronger
+        # evidence than the row's recurrence label, which 4.8.1 falls back on.
+        values.update(extra or {})
         if self._preset.brand == "volkswagen" and nav.name in (
             "climate_detail", "climate_settings",
         ):

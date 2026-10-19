@@ -995,7 +995,7 @@ _VW = BrandPreset(
                 ),
                 ActionSelector(
                     action="find_vehicle",
-                    content_desc_re=r"^(?:Vehicle\s*location|Find\s*vehicle|Fahrzeug\s*finden)$",
+                    content_desc_re=r"^(?:Vehicle\s*location|Fahrzeugstandort|Find\s*vehicle|Fahrzeug\s*finden)$",
                 ),
                 ActionSelector(
                     action="open_parking_marker",

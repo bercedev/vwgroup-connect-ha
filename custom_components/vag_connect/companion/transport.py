@@ -25,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 _DUMP_PATH = "/sdcard/vag_connect_ui.xml"
 # The hidden-node helper (a11y/README.md): pushed for a departure timer edit on
 # VW app 4.8.1 and removed afterwards. The hash pins the shipped build.
-A11Y_DEX_SHA256 = "93eaf4ef3a96af565cb06541bf0b1148f260af03c203b9c356469d4bcb507591"
+A11Y_DEX_SHA256 = "a43e3c09d05340fb862d019d14def5b03de4c24b5f8b1b4104006c9f8a5f992d"
 _A11Y_REMOTE = "/data/local/tmp/vag_connect_a11y.dex"
 _A11Y_RUN = f"CLASSPATH={_A11Y_REMOTE} app_process / A11yTree"
 

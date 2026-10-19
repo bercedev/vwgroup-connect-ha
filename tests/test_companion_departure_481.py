@@ -113,3 +113,29 @@ async def test_editor_without_the_hidden_node_helper_is_not_written():
         await channel._edit_timer(parse_ui_dump(xml('list_481')), 1, (8, 0), ('mon',), True)
     assert (phone.opened, phone.backs, phone.page) == (1, 1, False)
     assert channel.writes_enabled is False
+
+
+DEPARTURE = next(n for n in PRESETS['volkswagen'].nav_reads if n.name == 'departure_times')
+
+
+def test_page_day_buttons_win_over_the_list_label():
+    # 4.6.4: the page's buttons are the stronger reading, even if the row's
+    # label (which cannot tell one-time from repeating) says otherwise.
+    channel = CompanionChannel(object(), PRESETS['volkswagen'], time_fn=lambda: 0)
+    channel._app_strings = STRINGS
+    fields = {}
+    page = {'departure_timer_3_weekdays': 'fri,sat', 'departure_timer_3_repeat': False}
+    channel._apply_nav_values(DEPARTURE, parse_ui_dump(xml('list_481')), fields, page)
+    assert fields['departure_timer_3_weekdays'] == 'fri,sat'
+    assert fields['departure_timer_3_repeat'] is False
+
+
+def test_list_label_fills_the_days_a_481_page_cannot_show():
+    channel = CompanionChannel(object(), PRESETS['volkswagen'], time_fn=lambda: 0)
+    channel._app_strings = STRINGS
+    fields = {}
+    page = {f'departure_timer_{i}_repeat': True for i in (1, 2, 3)}
+    channel._apply_nav_values(DEPARTURE, parse_ui_dump(xml('list_481')), fields, page)
+    assert fields['departure_timer_1_weekdays'] == 'mon,tue,wed,thu,fri'
+    assert fields['departure_timer_3_weekdays'] == 'sat'
+    assert fields['departure_timer_3_repeat'] is True
