@@ -587,6 +587,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Laatste Rit — Gem. Elektrisch Verbruik"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Laatste Lange Rit — Afstand"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Laatste Lange Rit — Ritduur"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Laatste Lange Rit — Gem. Snelheid"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Laatste Lange Rit — Gem. Brandstofverbruik"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Laatste Lange Rit — Gem. Elektrisch Verbruik"
+      },
       "software_version": {
         "name": "Software-Versie"
       },

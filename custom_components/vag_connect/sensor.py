@@ -2291,6 +2291,58 @@ SENSOR_DESCRIPTIONS: tuple[VagSensorDescription, ...] = (
         suggested_display_precision=1,
         condition="electric",
     ),
+    # Companion only — the VW app's "Last long-haul trip" card (driving data
+    # read), its own family next to the single and since-refuelling trips.
+    VagSensorDescription(
+        key="companion_long_trip_distance_km",
+        translation_key="companion_long_trip_distance_km",
+        data_key="companion_long_trip_distance_km",
+        native_unit_of_measurement=UnitOfLength.KILOMETERS,
+        device_class=SensorDeviceClass.DISTANCE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:road-variant",
+        suggested_display_precision=1,
+    ),
+    VagSensorDescription(
+        key="companion_long_trip_duration_min",
+        translation_key="companion_long_trip_duration_min",
+        data_key="companion_long_trip_duration_min",
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:map-clock-outline",
+        suggested_display_precision=0,
+    ),
+    VagSensorDescription(
+        key="companion_long_trip_avg_speed_kmh",
+        translation_key="companion_long_trip_avg_speed_kmh",
+        data_key="companion_long_trip_avg_speed_kmh",
+        native_unit_of_measurement=UnitOfSpeed.KILOMETERS_PER_HOUR,
+        device_class=SensorDeviceClass.SPEED,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:speedometer",
+        suggested_display_precision=0,
+    ),
+    VagSensorDescription(
+        key="companion_long_trip_avg_fuel_consumption_l_100km",
+        translation_key="companion_long_trip_avg_fuel_consumption_l_100km",
+        data_key="companion_long_trip_avg_fuel_consumption_l_100km",
+        native_unit_of_measurement="L/100 km",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:gas-station",
+        suggested_display_precision=1,
+        condition="combustion",
+    ),
+    VagSensorDescription(
+        key="companion_long_trip_avg_electric_consumption_kwh_100km",
+        translation_key="companion_long_trip_avg_electric_consumption_kwh_100km",
+        data_key="companion_long_trip_avg_electric_consumption_kwh_100km",
+        native_unit_of_measurement="kWh/100 km",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:lightning-bolt",
+        suggested_display_precision=1,
+        condition="electric",
+    ),
 
     # #1378 (Škoda Elroq) — short-term (recent) average electric consumption.
     VagSensorDescription(
@@ -4535,6 +4587,12 @@ _REPORTER_KEYS: frozenset[str] = frozenset({
 # legitimately start as None and populate later, so they should NOT be
 # gated this way.
 _DATA_PRESENT_REQUIRED: frozenset[str] = frozenset({
+    # Companion only: no entities before the app's long-haul card was read.
+    "companion_long_trip_distance_km",
+    "companion_long_trip_duration_min",
+    "companion_long_trip_avg_speed_kmh",
+    "companion_long_trip_avg_fuel_consumption_l_100km",
+    "companion_long_trip_avg_electric_consumption_kwh_100km",
     # Companion only: unread location slots must not create entities.
     "charging_location_count",
     "charging_location_current",

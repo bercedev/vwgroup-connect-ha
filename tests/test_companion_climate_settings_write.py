@@ -408,7 +408,7 @@ async def test_zones_need_the_app_labels():
 
 @pytest.mark.asyncio
 async def test_older_app_is_refused_before_any_tap():
-    assert CLIMATE_SETTINGS_APP_VERSIONS == ("4.6.4",)
+    assert CLIMATE_SETTINGS_APP_VERSIONS == ("4.8.1", "4.6.4")
     phone = SettingsPhone(version="4.3.2")
     with pytest.raises(CompanionWriteBlocked, match="not mapped for app version 4.3.2"):
         await _channel(phone).set_climate_setting("climate_at_unlock", True)
