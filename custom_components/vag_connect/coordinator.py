@@ -2799,8 +2799,24 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                     )
                     self._notify_data_act_kickoff(vin)
             except DataActSessionExpiredError:
+                # #1867 (@alagerqv) — BREAK, not return. The persist at the end
+                # of this method is the ONLY thing that writes the attempt
+                # stamp, and returning jumped straight past it: the comment
+                # above the stamp promises it is "persisted below", and on this
+                # path it never was. So the 24 h backoff window never started,
+                # and the POST plus this repair re-fired on every setup and
+                # every reload — his stamp sat frozen at 2026-10-10T06:53:06Z.
+                #
+                # Stamp this VIN too, if nothing has yet. Only the POST site
+                # above reaches the stamp; a 401 from the probe
+                # (get_active_custom_request_identifier) raises before it, and
+                # that is a failed attempt exactly as much as a failed POST is.
+                # Without this, the probe-side 401 would still leave no record
+                # and keep re-firing.
+                new_ts.setdefault(vin, datetime.now(tz=timezone.utc).isoformat())
+                changed = True
                 self._raise_data_act_session_expired_repair()
-                return  # stop processing further VINs this cycle
+                break  # the session is dead for every VIN; stop, then persist
             except Exception as exc:  # noqa: BLE001
                 _LOGGER.debug(
                     "Data Act kickoff: VIN %s probe failed (%s) - skipping",
@@ -3279,6 +3295,16 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         """
         from homeassistant.helpers import issue_registry as ir  # noqa: PLC0415
 
+        # #1867 (@alagerqv) — the card appeared in his log with nothing next to
+        # it saying why. The two raise sites now log their 401 at debug; this
+        # one says the card is being raised, at a level a normal install
+        # records, so "where did this come from" is answerable without turning
+        # debug logging on first.
+        _LOGGER.warning(
+            "EU Data Act portal: the session was rejected (HTTP 401), raising "
+            "the re-authentication notice. Reads through the portal stay on "
+            "their last known values until it is signed in again."
+        )
         # v4.7.8 remembered here that we had raised it, so the per-poll refresh
         # could clear it again once the portal session was demonstrably alive.
         # #1867 removed that: the flag lived on this coordinator instance while
