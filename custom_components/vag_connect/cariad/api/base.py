@@ -289,6 +289,14 @@ class CariadBaseClient:
         # refreshes here, so a command failure can never knock the reads (and
         # thus the whole integration) offline. Reads keep ``_refresh_history``.
         self._cmd_refresh_history: list[float] = []
+        # #1866 (@georghaberkorn68-ctrl) — whether the budget below has already
+        # reported itself as spent, per plane. The refusal used to log at ERROR
+        # on EVERY attempt: his CUPRA logged it three times per poll cycle for
+        # hours on 17 and 18 October, which reads as a runaway loop rather than
+        # as a limit doing its job. The first refusal is news; the hundredth is
+        # the same news. Cleared whenever an attempt is actually booked, so a
+        # later episode reports itself again.
+        self._refresh_budget_reported: dict[bool, bool] = {False: False, True: False}
         # v2.9.0 - VW account-lock detection sliding window. Tuples of
         # (monotonic_seconds, http_status). Coordinator drains via
         # ``self.account_lock_signal`` to decide whether to raise the
@@ -1754,23 +1762,59 @@ class CariadBaseClient:
             )
             history[:] = [t for t in history if t > cutoff]
             if len(history) >= _REFRESH_MAX_PER_HOUR:
-                _LOGGER.error(
-                    "Token refresh storm: %d attempts in last %ds for %s (%s) —"
-                    " pausing to prevent IP ban; please reauthenticate from the UI",
-                    len(history),
-                    _REFRESH_WINDOW_S,
-                    self._brand.name,
-                    "command" if for_command else "data",
+                # #1866 — the message used to say "pausing to prevent IP ban",
+                # and nothing pauses. This refuses ONE attempt; the budget is a
+                # rolling window, so the next slot frees when the oldest booked
+                # attempt ages out of it. Saying "pausing" while refusing, once
+                # every poll, described an action the code does not take — and
+                # a reader who checks the claim and finds it false stops
+                # believing the next message too.
+                # Rounded UP: this is a "wait at least" figure, and
+                # flooring it would advertise a slot that is not free yet.
+                _frees_s = max(0.0, history[0] + _REFRESH_WINDOW_S - now)
+                _frees_in = max(1, -(-int(_frees_s) // 60))
+                _plane = "command" if for_command else "data"
+                _args = (
+                    len(history), _REFRESH_WINDOW_S, self._brand.name, _plane,
+                    _frees_in,
                 )
+                # ERROR once per episode, DEBUG while it stays spent. The limit
+                # is doing its job on every one of those calls; only the first
+                # is information.
+                if not self._refresh_budget_reported.get(for_command, False):
+                    self._refresh_budget_reported[for_command] = True
+                    _LOGGER.error(
+                        "Token refresh budget spent: %d attempts in the last "
+                        "%ds for %s (%s) — refusing further refreshes to avoid "
+                        "an account lock; the next one is allowed in about "
+                        "%d min. If the sign-in itself is being refused (see "
+                        "the errors above this line), re-entering credentials "
+                        "will not change that.",
+                        *_args,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Token refresh budget still spent: %d in %ds for %s "
+                        "(%s); next slot in about %d min",
+                        *_args,
+                    )
                 # #1078 — flag the DATA-plane storm so the coordinator can raise
                 # a "raise your update interval" Repair. Commands have their own
                 # bounded budget and a separate remedy, so don't flag those.
                 if not for_command:
                     self.refresh_storm_detected = True
+                # The word "storm" stays: it is the condition, and the
+                # reporter asked for it to stay. What is gone is the claim
+                # that re-entering credentials is the remedy.
                 raise AuthenticationError(
-                    "Token refresh storm — please reauthenticate"
+                    "Token refresh storm — refusing further refreshes until "
+                    "the budget frees; see the log for what is refusing the "
+                    "sign-in"
                 )
             history.append(now)
+            # An attempt was booked, so the budget is not spent; the next
+            # refusal is a new episode and says so at ERROR again.
+            self._refresh_budget_reported[for_command] = False
 
             # v2.15.0 — durable MBB bearer refresh. The MBB OAuth backend
             # (mbboauth-1d) refreshes via grant_type=refresh_token with the

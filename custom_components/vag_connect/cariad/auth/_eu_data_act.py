@@ -2057,6 +2057,10 @@ def map_dataset_to_vehicle_data(
         if not attr:
             return
         if chosen is not None:
+            # #465 — the leaf's NAME, before anything else: a capture time is
+            # only useful once you know what it is the capture time OF, and a
+            # leaf that carries no timestamp still needs to be nameable.
+            d.field_source_leaf[attr] = chosen
             ts = (field_ts or {}).get(chosen)
             if ts is not None:
                 iso = _epoch_or_iso(str(ts))
@@ -3155,8 +3159,14 @@ def map_dataset_to_vehicle_data(
     # percent (distinct from fuel_level_current_level already tried first).
     # Scout #1430 (Škoda Octavia) — ``fuelLevel`` is the Škoda EU-portal leaf for
     # the tank percent, alongside the VW/portal dialect names already tried.
+    # #465 — ``record_as`` here is not about freshness. Five aliases,
+    # first present wins, and two reporters have now disputed the number this
+    # line produces; without the leaf name recorded, neither dispute could be
+    # settled from diagnostics. A disputed field is exactly the one that has to
+    # say where it came from.
     fuel = _to_int(first("fuel_level_current_level", "tank_current_level",
-                         "fuelLevel_pct", "fuel_level", "fuelLevel"))
+                         "fuelLevel_pct", "fuel_level", "fuelLevel",
+                         record_as="fuel_level"))
     if fuel is not None:
         d.fuel_level = fuel
 
