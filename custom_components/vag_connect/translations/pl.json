@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Nic nie zaimportowano: portal EU Data Act nie ma obecnie jednorazowego eksportu historycznego dla tego pojazdu ({reason}). Jeśli widnieje no_request, eksport nie został jeszcze zamówiony w portalu albo zamówiony już wygasł. Jeśli widnieje empty lub no_content, portal przyjął zlecenie, ale nie utworzył jeszcze pliku, co może potrwać kilka godzin."
     },
+    "data_act_request_refused": {
+      "message": "Portal EU Data Act odmówił utworzenia żądania danych ({reason}). Nic nie zostało utworzone. Sprawdź w portalu, czy własność lub użytkowanie tego pojazdu jest potwierdzone i czy udzielono zgody na udostępnianie danych; jeśli dla tego auta istnieje już aktywne żądanie, portal dopuszcza tylko jedno."
+    },
+    "historical_export_refused": {
+      "message": "Portal EU Data Act nie przyjął żądania jednorazowego eksportu historycznego, więc nic nie zamówiono. Zwykle portal odrzuca drugie żądanie, dopóki dla pojazdu jedno jest w toku — sprawdź portal i spróbuj ponownie."
+    },
+    "portal_session_expired": {
+      "message": "Portal EU Data Act odrzucił sesję, więc nic nie zamówiono. Zaloguj się ponownie: Ustawienia → Urządzenia i usługi → VW Group Connect → menu z trzema kropkami → Rekonfiguruj."
+    },
     "historical_disabled": {
       "message": "Jednorazowy eksport historyczny jest obecnie wyłączony."
     },

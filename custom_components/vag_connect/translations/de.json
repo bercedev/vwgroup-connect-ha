@@ -2965,6 +2965,15 @@
     "historical_export_empty": {
       "message": "Es wurde nichts importiert: Das EU-Data-Act-Portal hat derzeit keinen einmaligen Verlaufsexport für dieses Fahrzeug ({reason}). Steht dort no_request, wurde der Export im Portal noch nicht angefordert oder der angeforderte ist inzwischen abgelaufen. Steht dort empty oder no_content, hat das Portal die Anforderung angenommen, die Datei aber noch nicht erzeugt – das kann mehrere Stunden dauern."
     },
+    "data_act_request_refused": {
+      "message": "Das EU-Data-Act-Portal hat das Anlegen der Datenanforderung abgelehnt ({reason}). Es wurde nichts angelegt. Prüfe im Portal, ob Eigentum bzw. Nutzung für dieses Fahrzeug bestätigt und die Datenfreigabe erteilt ist; existiert für das Auto bereits eine aktive Anforderung, lässt das Portal nur eine zu."
+    },
+    "historical_export_refused": {
+      "message": "Das EU-Data-Act-Portal hat die Anforderung des einmaligen Verlaufsexports nicht angenommen, es wurde also nichts angefordert. Meist lehnt das Portal eine zweite Anforderung ab, solange für das Fahrzeug noch eine offen ist – schau im Portal nach und versuch es danach erneut."
+    },
+    "portal_session_expired": {
+      "message": "Das EU-Data-Act-Portal hat die Sitzung abgelehnt, es wurde also nichts angefordert. Melde dich neu an: Einstellungen → Geräte & Dienste → VW Group Connect → Drei-Punkte-Menü → Neu konfigurieren."
+    },
     "historical_disabled": {
       "message": "Der einmalige historische Export ist derzeit deaktiviert."
     },

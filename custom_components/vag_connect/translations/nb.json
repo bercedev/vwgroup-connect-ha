@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Ingenting ble importert: EU Data Act-portalen har akkurat nå ingen engangseksport av historikk for dette kjøretøyet ({reason}). Står det no_request, er eksporten ennå ikke bestilt i portalen, eller den du bestilte har gått ut. Står det empty eller no_content, har portalen godtatt bestillingen, men ikke laget filen ennå, og det kan ta flere timer."
     },
+    "data_act_request_refused": {
+      "message": "EU Data Act-portalen nektet å opprette dataforespørselen ({reason}). Ingenting ble opprettet. Kontroller i portalen at eierskap eller bruk av dette kjøretøyet er bekreftet, og at datadelingen er gitt; finnes det allerede en aktiv forespørsel for bilen, tillater portalen bare én."
+    },
+    "historical_export_refused": {
+      "message": "EU Data Act-portalen godtok ikke forespørselen om engangseksport av historikk, så ingenting ble bestilt. Vanligvis avviser portalen en forespørsel til så lenge én er underveis for kjøretøyet — sjekk portalen og prøv igjen etterpå."
+    },
+    "portal_session_expired": {
+      "message": "EU Data Act-portalen avviste økten, så ingenting ble bestilt. Logg inn på nytt: Innstillinger → Enheter og tjenester → VW Group Connect → trepunktsmenyen → Konfigurer på nytt."
+    },
     "historical_disabled": {
       "message": "Engangs historisk eksport er for øyeblikket deaktivert."
     },

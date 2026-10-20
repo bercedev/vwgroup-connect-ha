@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Rien n'a été importé : le portail EU Data Act n'a actuellement aucun export historique ponctuel pour ce véhicule ({reason}). Si la raison est no_request, l'export n'a pas encore été demandé dans le portail, ou celui demandé a expiré depuis. Si elle est empty ou no_content, le portail a accepté la demande mais n'a pas encore produit le fichier, ce qui peut prendre plusieurs heures."
     },
+    "data_act_request_refused": {
+      "message": "Le portail EU Data Act a refusé de créer la demande de données ({reason}). Rien n'a été créé. Vérifiez dans le portail que la propriété ou l'usage de ce véhicule est confirmé et que le partage de données est accordé ; s'il existe déjà une demande active pour cette voiture, le portail n'en autorise qu'une."
+    },
+    "historical_export_refused": {
+      "message": "Le portail EU Data Act n'a pas accepté la demande d'export historique ponctuel ; rien n'a donc été demandé. En général le portail refuse une seconde demande tant qu'une autre est en cours pour ce véhicule — vérifiez le portail puis réessayez."
+    },
+    "portal_session_expired": {
+      "message": "Le portail EU Data Act a rejeté la session ; rien n'a donc été demandé. Reconnectez-vous : Paramètres → Appareils et services → VW Group Connect → menu à trois points → Reconfigurer."
+    },
     "historical_disabled": {
       "message": "L'export historique ponctuel est actuellement désactivé."
     },
