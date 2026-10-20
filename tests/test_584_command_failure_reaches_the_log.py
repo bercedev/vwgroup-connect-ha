@@ -48,7 +48,11 @@ from custom_components.vag_connect.cariad.exceptions import (
 )
 
 _LOG = "custom_components.vag_connect.coordinator"
-_VIN = "WVWZZZ3CZZZ074295"
+# Synthetic, per CONTRIBUTING: the shape is real, the serial is zeroed.
+# The reporter's own masked tail went in here first and the repo's VIN
+# guard refused the commit -- which is the guard doing its job, and worth
+# leaving a note about rather than quietly correcting.
+_VIN = "WVWZZZ3CZZW000000"
 # The real leg-3 client-identity refusal, trimmed to its first sentence.
 _PROSE = (
     "the car's gateway accepted your S-PIN and then refused this "
@@ -178,7 +182,7 @@ def test_the_vin_is_masked_on_both_branches(caplog) -> None:
             _dispatch(err)
         line = _errors(caplog)[0]
         assert _VIN not in line
-        assert "074295" in line, "the masked tail is what makes it identifiable"
+        assert "000000" in line, "the masked tail is what makes it identifiable"
 
 
 def test_the_classification_is_still_recorded(caplog) -> None:
