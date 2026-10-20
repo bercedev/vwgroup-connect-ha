@@ -74,6 +74,30 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   nothing to re-add, the car simply has not reported. All twelve languages
   ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
 
+- **The FAQ now says where the vanished last-trip sensors went.**
+  @fschulte2812 ([#1437](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1437))
+  went thirteen days unanswered on a thread whose settled conclusion — "VW
+  dropped the short-term cluster, there is nothing to fix" — was true of the EU
+  Data Act portal and too broad as a general answer. The volkswagen.de channel
+  had carried those figures since v4.11.0, and the parser for it was already
+  owed when two reporters were told to stop looking. Nothing in the README or
+  the FAQ mentioned any of it, so anyone with the same symptom found the thread,
+  read the old conclusion and stopped.
+
+  There is a FAQ entry now: which five sensors are affected, why they emptied,
+  the three steps to get them back, and — because "add the channel" is not a
+  complete restoration — a table of what it does **not** bring back
+  (recuperation average, zero-emission distance, range gained while charging).
+  It also points Audi owners at their own, different fault instead of sending
+  them through a sign-in that cannot help them.
+
+  A stale instruction is worse than none, so a test checks that what the entry
+  claims is still true of the code: the sensor keys are read out of the
+  document and matched against the real ones, the brand list against the
+  channel's gate, and the `source: vw.de website` attribute against the label
+  the code generates. If any of them moves, the entry gets corrected instead of
+  quietly misleading the next reader.
+
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
 
