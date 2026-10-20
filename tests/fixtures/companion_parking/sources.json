@@ -1,0 +1,10 @@
+{
+  "app_version": "4.8.1",
+  "captured": "2026-10-16",
+  "contributor": "gszigethy",
+  "vehicle": "Tiguan eHybrid",
+  "files": [
+    "map_481.xml"
+  ],
+  "notes": "Read-only ADB capture of the Map tab before any marker tap. No marker, address or coordinate text on screen."
+}

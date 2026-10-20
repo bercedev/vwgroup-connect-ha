@@ -112,6 +112,8 @@ DRIVING_TILE = "acc_vehicle_tab_label_driving_data"
 _RTS = "volkswagen_acc_cat_snowshoe_rts_"
 _RTS_UNIT = "volkswagen_cat_snowshoe_rts_"
 TRIP_CARDS = {
+    # Companion only: the app's long-haul card has no cloud field of its own here.
+    "companion_long_trip": (_RTS + "lastLongHaulTripLabel", _RTS_UNIT + "lastLongDistanceTripTileTitle"),
     "last_trip": (_RTS + "lastSingleTripLabel", _RTS_UNIT + "lastSingleTripTileTitle"),
     "refuel_trip": (
         _RTS + "cyclicTripsScreenheaderLabelHybrid", _RTS + "cyclicTripsScreenheaderEV",
@@ -151,10 +153,11 @@ _CHARGING_KEYS = (
 )
 # Overview tiles opened by a nav read, by their translated label.
 DEPARTURE_TILE = "acc_vehicle_tab_label_departure_times"
+VEHICLE_LOCATION = "volkswagen_cat_nav_mapsVehicleLocationLabel"
 _SINGLE_KEYS = frozenset({
     "acc_common_hint_details", "acc_vehicle_tab_label_settings", *_LIMIT_KEYS,
     POWER_BUDGET_FOOTER, *_BACKEND_LIMIT_TEXTS,
-    DEPARTURE_TILE, TIMER_SAVE, TIMER_CANCEL, *_TRIP_KEYS,
+    DEPARTURE_TILE, VEHICLE_LOCATION, TIMER_SAVE, TIMER_CANCEL, *_TRIP_KEYS,
     SYNC_LAST_UPDATE, SYNC_JUST_NOW, SYNC_TOO_OLD, DATA_UNAVAILABLE, *_CLIMA_KEYS,
     *HEALTH_ROWS, HEALTH_NO_ISSUES, HEALTH_ISSUES, *SETTINGS_SWITCHES,
     *_TILE_KEYS, *_CHARGING_KEYS,
@@ -450,6 +453,40 @@ def find_tile_entry(nodes: list[UiNode], resources: StringResources, key: str) -
     ), None)
 
 
+def find_vehicle_location(nodes: list[UiNode], resources: StringResources) -> UiNode | None:
+    """The map's location button by the installed app's translated label."""
+    labels = _labels(resources, VEHICLE_LOCATION)
+    matches = [
+        n for n in nodes if n.enabled and n.tap_point
+        and any(t.strip().casefold() in labels for t in (n.text, n.content_desc) if t)
+    ]
+    return clickable_target(nodes, matches[0]) if len(matches) == 1 else None
+
+
+def clickable_target(nodes: list[UiNode], label: UiNode) -> UiNode | None:
+    """The label itself if clickable, else the smallest clickable node around it.
+
+    4.8.1 labels the map's icon buttons on a non-clickable child; the click
+    sits on the button around it. A clickable area that also holds another
+    label (the map itself) is not that button. Without one there is nothing to tap.
+    """
+    point = label.tap_point
+    if point is None:
+        return None
+    if label.clickable:
+        return label
+    x, y = point
+    others = [
+        n for n in nodes if n is not label and n.bounds and (n.text or n.content_desc)
+    ]
+    around = [
+        n for n in nodes if n.enabled and n.clickable and n.bounds and n.tap_point
+        and n.bounds[0] <= x < n.bounds[2] and n.bounds[1] <= y < n.bounds[3]
+        and not any(o is not n and _inside(o, n.bounds) for o in others)
+    ]
+    return min(around, key=lambda n: (n.bounds[2] - n.bounds[0]) * (n.bounds[3] - n.bounds[1]) if n.bounds else 0, default=None)
+
+
 def driving_tile_text(nodes: list[UiNode], resources: StringResources) -> str | None:
     """The overview's Driving data tile as read out, or None when it is not on screen.
 
@@ -470,20 +507,31 @@ def driving_tile_text(nodes: list[UiNode], resources: StringResources) -> str | 
 _DRIVING_TILE_FALLBACK = re.compile(r"^(?:Driving\s*data|Fahrdaten)\.\s")
 
 
-def read_departure_timers(nodes: list[UiNode]) -> dict[str, object]:
+def read_departure_timers(
+    nodes: list[UiNode], resources: StringResources | None = None,
+) -> dict[str, object]:
     """The Departure times screen's timer rows, top to bottom, at most three.
 
     Each row's switch is the timer's on/off and its clock text the time,
     reported as 24-hour "HH:MM" like the VW cloud's ``departureTime`` (see
     ``departure.departure_rows``). The words around them are not read, so
-    this works in any language. The count is set only when all three timers
-    were on screen.
+    this works in any language. If translations are available, also read the
+    recurrence label within each row. It does not prove Repeat: a one-time
+    Saturday timer and a repeating Saturday timer have the same list label.
+    The count is set only when all three timers were on screen.
     """
     rows = departure_rows(nodes)
     out: dict[str, object] = {}
     for index, row in enumerate(rows[:3], start=1):
         out[f"departure_timer_{index}_enabled"] = row.enabled
         out[f"departure_timer_{index}_time"] = row.time
+        if resources:
+            from .charging_locations import recurrence_days  # noqa: PLC0415
+
+            days = {value for n in nodes if n.text and _inside(n, row.bounds)
+                    if (value := recurrence_days(n.text, resources)) is not None}
+            if len(days) == 1:
+                out[f"departure_timer_{index}_weekdays"] = days.pop()
     if len(rows) >= 3:
         out["departure_timer_enabled_count"] = sum(1 for row in rows[:3] if row.enabled)
     return out
@@ -529,20 +577,52 @@ def _trip_cards(
     return cards
 
 
+def trip_card_families(nodes: list[UiNode], resources: StringResources) -> set[str]:
+    """The trip card families whose titles are on screen, clipped cards included."""
+    return {prefix for prefix, _box in _trip_cards(nodes, resources)}
+
+
 def trip_carousel_row(
     nodes: list[UiNode], resources: StringResources,
 ) -> tuple[int, int, int, int] | None:
-    """The band the trip cards share, to swipe sideways in; None without both."""
-    boxes = [box for _prefix, box in _trip_cards(nodes, resources)]
-    if len(boxes) < 2:
-        return None
-    left = min(b[0] for b in boxes)
-    right = max(b[2] for b in boxes)
-    return left, max(b[1] for b in boxes), right, min(b[3] for b in boxes)
+    """A sideways card band, including layouts with unfamiliar card titles.
+
+    Prefer known cards for older trees. Otherwise require a scrollable box
+    containing side-by-side clickable cards and translated trip row labels;
+    a lone vertical screen scroller is not evidence of a carousel.
+    """
+    boxes = list(dict.fromkeys(box for _prefix, box in _trip_cards(nodes, resources)))
+    if len(boxes) >= 2:
+        top, bottom = max(b[1] for b in boxes), min(b[3] for b in boxes)
+        if top < bottom:
+            return min(b[0] for b in boxes), top, max(b[2] for b in boxes), bottom
+    labels = _labels(resources, *TRIP_ROWS)
+    for container in sorted(
+        (n for n in nodes if n.scrollable and n.bounds and n.tap_point),
+        key=lambda n: (n.bounds[2] - n.bounds[0]) * (n.bounds[3] - n.bounds[1]) if n.bounds else 0,
+    ):
+        assert container.bounds is not None
+        cards = [n for n in nodes if n.clickable and n.bounds and n.tap_point
+                 and _inside(n, container.bounds) and n.bounds != container.bounds]
+        for first in cards:
+            assert first.bounds is not None
+            for second in cards:
+                assert second.bounds is not None
+                if first.bounds[2] > second.bounds[0]:
+                    continue
+                top = max(first.bounds[1], second.bounds[1])
+                bottom = min(first.bounds[3], second.bounds[3])
+                if top >= bottom:
+                    continue
+                seen = {n.text.strip().casefold() for n in nodes
+                        if _inside(n, first.bounds) and n.text.strip().casefold() in labels}
+                if len(seen) >= 2:
+                    return container.bounds[0], top, container.bounds[2], bottom
+    return None
 
 
 def read_driving_data(nodes: list[UiNode], resources: StringResources) -> dict[str, object]:
-    """The trip cards' rows into the VW cloud's ``last_trip_*`` / ``refuel_trip_*``.
+    """Read single, refuel/charging and long-haul cards into distinct field families.
 
     Each row label is followed, to its right, by its value text (consumption
     by one line per energy). Values are kept only when their unit is one of the

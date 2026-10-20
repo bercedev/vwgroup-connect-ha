@@ -78,6 +78,37 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   outside-humidity reading, which comes off a different channel entirely, so a
   car reporting both will settle it ([#1863](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1863)).
 
+- **Volkswagen Companion (ADB): VW app 4.8.1 support.** The Companion's reads
+  and controls work again on VW app 4.8.1; departure time and Repeat edits need
+  a direct ADB connection, and weekday changes stay in the app. Developed and
+  checked on a Tiguan eHybrid in
+  [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha)
+  (gszigethy/vwgroup-connect-ha#112, gszigethy/vwgroup-connect-ha#113,
+  gszigethy/vwgroup-connect-ha#115): each read was compared with the app, and
+  each control was sent once to the car through this code, read back and put
+  back. Thanks @gszigethy.
+  - **Commands on 4.8.1:** charging start/stop, the charge target, climate
+    start/stop, the temperature dial, window heating alone, climate at unlock,
+    automatic window heating, the climate zones, *Synchronise now*, and the
+    departure timers (on/off, time and Repeat). 4.8.1 is listed per command
+    after its own live test, not in the preset's read list, so app builds
+    between 4.6.4 and 4.8.1, which nobody has checked, keep their reads and
+    stay without commands.
+  - **Departure timer editor on 4.8.1.** The app rebuilt the timer page; its
+    time picker is hidden from `uiautomator` and its day buttons show no
+    state. A 6 kB helper (`companion/a11y/`, Java source and build steps
+    included, SHA-256 pinned) is pushed over ADB for the edit and removed
+    afterwards. It reads the hidden wheels and sets them with their own
+    accessibility action, so the time is checked before Save. A change of
+    weekdays cannot be checked before Save on this page, so it is refused
+    there (change the days in the app). The ADB Bridge add-on and the agent
+    relay cannot run the helper and refuse the edit before changing anything
+    on the page.
+  - **Last long-haul trip:** five new Companion-only sensors (distance,
+    duration, average speed, fuel and electric consumption) from the Driving
+    data card 4.8.1 added. They appear only on Companion entries once the card
+    was read, and are not mapped to any cloud or EU Data Act field.
+
 ### Geändert / Changed
 
 - **The volkswagen.de HTTP/2 channel now uses Home Assistant's own SSL context
@@ -350,6 +381,14 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   error object also holds the request address and the response body, which are
   the two things this line must never grow
   ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
+
+- **Volkswagen Companion (ADB) reads on VW app 4.8.1.** The parking position
+  read taps the button around the app's *Vehicle location* label (4.8.1 made
+  the label itself not clickable) and never the map. The Driving data
+  carousel is read whatever card it opens on; the first read sweeps both ends
+  and remembers which cards exist, again daily. Departure timers read their
+  weekdays from the list's recurrence label and Repeat from the new editor
+  (gszigethy/vwgroup-connect-ha#112, gszigethy/vwgroup-connect-ha#113).
 
 ### Sicherheit / Security
 

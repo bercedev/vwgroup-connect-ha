@@ -41,7 +41,7 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, AsyncIterator, Awaitable, Callable
 
-from .presets import app_version_covered, app_version_listed
+from .presets import app_version_listed
 from .resources import (
     DATA_UNAVAILABLE,
     StringResources,
@@ -60,7 +60,9 @@ if TYPE_CHECKING:
 # Commands are mapped against these builds only (4.6.4: the same sheet ids in
 # the 4.6.4 dumps; not yet sent to a car on 4.6.4). Reads keep the preset's own
 # version set; a tap on another build's sheet is not assumed to be safe.
-CLIMATE_APP_VERSIONS: tuple[str, ...] = ("4.6.4", "4.3.2")
+# 4.8.1 (2026-10-17, Tiguan, live): Start/Stop, the dial on start and on a
+# running air conditioning, and window heating alone through the mode picker.
+CLIMATE_APP_VERSIONS: tuple[str, ...] = ("4.8.1", "4.6.4", "4.3.2")
 
 DIAL_MIN_C = 15.5  # rendered "LO"
 DIAL_MAX_C = 30.0  # rendered "HI"
@@ -414,9 +416,7 @@ class ClimateController:
             await ch._refresh_version_gate()
         except CompanionTransportError as err:
             raise self._blocked(str(err)) from err
-        if not ch._version_ok or not app_version_covered(
-            ch._live_app_version, CLIMATE_APP_VERSIONS
-        ):
+        if not ch._version_ok:
             raise self._blocked(
                 f"climate commands are mapped for app {'/'.join(CLIMATE_APP_VERSIONS)}; "
                 f"the phone has {ch._live_app_version or 'an unknown version'}. "
