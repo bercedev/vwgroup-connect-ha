@@ -192,6 +192,7 @@
       "email_two_factor_required": "Wymagane 2FA przez e-mail. Sprawdź skrzynkę (i spam) w poszukiwaniu 6-cyfrowego kodu, następnie zaloguj się ręcznie w aplikacji.",
       "too_many_requests": "Konto tymczasowo zablokowane. Poczekaj 15 minut.",
       "invalid_credentials": "Nieprawidłowy e-mail lub hasło.",
+      "invalid_otp": "Ten kod z e-maila nie został przyjęty. To nie jest kwestia hasła — zostało już sprawdzone, dlatego w ogóle przyszedł kod. Poproś o nowy kod i spróbuj ponownie; jeśli nadal się nie udaje, zaloguj się raz na volkswagen.de w przeglądarce, a potem dodaj kanał jeszcze raz.",
       "website_login_failed": "Twój e-mail i hasło nie są problemem — logowanie do volkswagen.de przeszło ten etap i zawiodło dopiero później (na przykład wygasła sesja, pętla przekierowań albo nierozpoznana strona). Powód jest w dzienniku Home Assistanta. Zmiana hasła nie pomoże; jeśli to się powtarza, otwórz zgłoszenie i dołącz ten wiersz dziennika.",
       "portal_interaction_required": "Portal EU Data Act wymaga jednorazowej czynności w przeglądarce lub aplikacji marki (np. zaakceptowania warunków, potwierdzenia zgody, dokończenia onboardingu/wyboru regionu), zanim zadziała dostęp bez interfejsu. To NIE jest problem z hasłem — otwórz portal raz w przeglądarce, wykonaj polecenie i spróbuj ponownie.",
       "upstream_unavailable": "Backend VW chwilowo niedostępny. To problem po stronie serwera VW, a NIE błąd uwierzytelniania. Poczekaj 5–15 minut i spróbuj ponownie. NIE konfiguruj integracji ponownie.",

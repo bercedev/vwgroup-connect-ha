@@ -1335,6 +1335,23 @@ class WebsiteAuthProxyConnector:
                 _safe_url(landed),
                 "present" if err else "none",
             )
+            # #1843 (@kalwados) — these are TWO different outcomes and they used
+            # to raise the same class, which the options flow then reported as
+            # "your username or password are wrong". He had just received the
+            # e-mail code and typed it correctly; his credentials had been
+            # accepted two steps earlier, which is WHY there was a code at all.
+            #
+            # An HTTP error is the site failing, not the code being wrong, and
+            # AuthProxyUnavailableError already means exactly that ("server-side
+            # failure, not your session"). Landing back on the challenge page is
+            # the only outcome that is plausibly about the code itself — and even
+            # then it is the CODE, never the password.
+            if landed_status >= 400:
+                raise AuthProxyUnavailableError(
+                    "Website authproxy: the site answered "
+                    f"{landed_status} while checking the e-mail code — this is "
+                    "a server-side failure, not your code or your password"
+                )
             raise AuthenticationError(
                 err or "Website authproxy: OTP rejected — check the code"
             )
