@@ -26,13 +26,31 @@ from ..exceptions import (
     AuthenticationError,
     AuthProxyUnavailableError,
     EuropeAttestationError,
+    RateLimitError,
     TokenExpiredError,
+    UpstreamUnavailableError,
 )
 from ..models import BrandConfig, TokenSet, VehicleData
 
 _LOGGER = logging.getLogger(__name__)
 
 _REQUEST_TIMEOUT = 60
+
+#: #1855 — error classes ``authenticate`` lets through unchanged instead of
+#: flattening into ``AuthenticationError`` on the last strategy.
+#:
+#: The bar for being in here is narrow and should stay narrow: the message must
+#: be one WE wrote, built from a status code and a brand name, and must never
+#: be able to carry a URL, a token or an account identifier. That is the whole
+#: reason the surrounding handler redacts foreign exceptions, and it is why
+#: ``APIError`` is absent despite also being ours — its message is derived from
+#: a request URL (redacted, but derived), so it stays on the safe side of the
+#: line. Each of the three below is constructed from literals plus an int.
+_SELF_DESCRIBING_ERRORS = (
+    UpstreamUnavailableError,
+    RateLimitError,
+    AuthProxyUnavailableError,
+)
 
 # Token-refresh storm protection (v1.8.7).
 # Capped at 3 successful-or-attempted refreshes per rolling hour. If the
@@ -578,6 +596,22 @@ class CariadBaseClient:
                 if idx == len(strategies) - 1:
                     if attestation_err is not None:
                         raise attestation_err from err
+                    # #1855 — but NOT for our own error classes. The redaction
+                    # above exists because a foreign exception's __str__ can
+                    # carry a callback URL or a token; it was never a reason to
+                    # throw the CLASS away as well, and doing so told the user
+                    # their password was wrong whenever VW's backend was 5xx-ing
+                    # or had rate-limited the account.
+                    #
+                    # It is not only the wording: an AuthenticationError on the
+                    # poll path becomes "invalid_credentials" and starts a
+                    # reauth flow, so a server outage asked people to re-enter
+                    # working credentials. The coordinator already classifies
+                    # UpstreamUnavailableError as a self-healing poll error, and
+                    # the config flow already has distinct translated messages
+                    # for both — all of that was simply unreachable from here.
+                    if isinstance(err, _SELF_DESCRIBING_ERRORS):
+                        raise
                     raise AuthenticationError(
                         f"Auth failed with {type(err).__name__} "
                         f"(no usable strategy left)"
