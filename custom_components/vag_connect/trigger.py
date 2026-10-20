@@ -19,6 +19,7 @@ per-device targeting is a future enhancement.
 """
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.const import CONF_DEVICE_ID
@@ -30,6 +31,8 @@ from ._vol import vol
 
 from .const import DOMAIN
 from .trigger_detect import EVENT_KEYS
+
+_LOGGER = logging.getLogger(__name__)
 
 # ``CONF_OPTIONS`` only exists in homeassistant.const on newer cores; the
 # key itself is stable ("options"), so define it locally (CI runs older HA).
@@ -53,31 +56,69 @@ _VIN = vol.All(cv.string, vol.Upper, vol.Match(r"^[A-Z0-9]{17}$"))
 _OPTIONS_SCHEMA = vol.Schema({vol.Optional(CONF_VIN): _VIN}, extra=vol.ALLOW_EXTRA)
 
 
-def _resolve_target_vins(hass: HomeAssistant, config: Any) -> set[str]:
-    """VINs this trigger/condition config is scoped to — empty ⇒ all vehicles.
+def _resolve_target_vins(hass: HomeAssistant, config: Any) -> set[str] | None:
+    """VINs this trigger/condition config is scoped to.
+
+    Three outcomes, and the difference between the last two is the whole point:
+
+    * ``None`` — **nothing was asked for**. Account-wide, the byte-identical v1
+      behaviour.
+    * a non-empty set — scope to exactly those VINs.
+    * an **empty set** — a scope *was* asked for and resolved to no vehicle.
+      Match nothing.
+
+    This used to return a bare ``set()`` for all three, and both callers then
+    failed OPEN: the trigger subscribed with ``vin=None`` (which the detector
+    fires for every VIN) and the condition's ``if vins and …`` guard was skipped
+    on a falsy empty set. So an automation written for ONE car silently applied
+    to every car on the account — a stale ``device_id`` after a car was removed
+    and re-added is enough to land there, and so is a target expressed with any
+    field other than ``device_id``. A scoped config that cannot be resolved must
+    do nothing, not everything.
 
     Reads ``options.vin`` and resolves each ``target.device_id`` to its VIN via
     the device registry (vehicle devices carry ``identifiers={(DOMAIN, vin)}``;
     the per-entry settings device uses ``<entry_id>_settings`` — skipped).
     Defensive against the experimental config shape: attributes are read with
-    ``getattr`` so a differently-shaped config degrades to "all vehicles".
+    ``getattr``, and a config carrying neither key still means "nothing asked
+    for" rather than "asked and failed".
     """
-    vins: set[str] = set()
     options = getattr(config, "options", None) or {}
+    target = getattr(config, "target", None) or {}
     vin = options.get(CONF_VIN)
+    device_ids = target.get(CONF_DEVICE_ID) or []  # cv.TARGET_FIELDS ⇒ a list
+    # Anything in ``target`` is a scoping request, including a shape we cannot
+    # read — a ``target:`` with an area or a label resolves to no device here,
+    # and widening to the whole account would be the same failure in a new coat.
+    scoped = bool(vin) or bool(target)
+    if not scoped:
+        return None
+
+    vins: set[str] = set()
     if vin:
         vins.add(str(vin))
-    target = getattr(config, "target", None) or {}
-    device_ids = target.get(CONF_DEVICE_ID) or []  # cv.TARGET_FIELDS ⇒ a list
     if device_ids:
         registry = dr.async_get(hass)
         for device_id in device_ids:
             device = registry.async_get(device_id)
             if device is None:
+                _LOGGER.warning(
+                    "A VW Group Connect trigger or condition targets device %s, "
+                    "which no longer exists. It will not match any vehicle until "
+                    "the automation is pointed at a current device.",
+                    device_id,
+                )
                 continue
             for domain, ident in device.identifiers:
                 if domain == DOMAIN and not str(ident).endswith("_settings"):
                     vins.add(str(ident))
+    if not vins:
+        _LOGGER.warning(
+            "A VW Group Connect trigger or condition is scoped to a target that "
+            "resolves to no vehicle (%s). It will not match anything — this used "
+            "to silently apply to every vehicle on the account.",
+            ", ".join(sorted(target)) or "no usable field",
+        )
     return vins
 
 # The named-trigger platform only exists on HA 2026.7+ (and is upstream-flagged
@@ -150,7 +191,16 @@ class _VagVehicleTrigger(Trigger):
         # VINs, subscribe once per VIN (the detector filters per edge); unset ⇒
         # register with vin=None, the byte-identical v1 account-wide behaviour.
         target_vins = _resolve_target_vins(self._hass, self._config)
-        vins: tuple[str | None, ...] = tuple(target_vins) or (None,)
+        # None ⇒ nothing was asked for ⇒ account-wide (vin=None, which
+        # trigger_detect fires for every VIN). An EMPTY set means a scope WAS
+        # asked for and resolved to no vehicle: subscribe to nothing rather than
+        # falling back to the account-wide listener, which is what silently
+        # turned a one-car automation into an every-car one.
+        vins: tuple[str | None, ...]
+        if target_vins is None:
+            vins = (None,)
+        else:
+            vins = tuple(target_vins)
         unsubs = [
             coord.register_transition_listener(event_key, vin, _on_transition)
             for coord in _coordinators(self._hass)

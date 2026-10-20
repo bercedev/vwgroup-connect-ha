@@ -75,12 +75,25 @@ def _any_vehicle_matches(
     hass: HomeAssistant, condition_key: str, vins: set[str] | None = None
 ) -> bool:
     # v4.7.11 — when *vins* is a non-empty set, only those VINs are considered
-    # (per-vehicle scoping); None/empty ⇒ any vehicle, the v1 account-wide check.
+    # (per-vehicle scoping); None ⇒ any vehicle, the v1 account-wide check.
+    #
+    # An EMPTY set is NOT the same as None and must not be treated as one: it
+    # means the config asked to be scoped and the scope resolved to no vehicle
+    # (a stale device_id, or a target expressed with a field we cannot read).
+    # The old guard was ``if vins and …``, which is falsy on an empty set and so
+    # skipped the filter entirely — a condition written for one car then
+    # answered for every car on the account.
+    #
+    # ``is not None`` below is the whole fix, and it is deliberately the ONLY
+    # mechanism: an early ``if not vins: return False`` would do the same job,
+    # and having both meant neither could be pinned — a mutation test removing
+    # either one still passed, because the other covered for it. One guard, one
+    # test that fails when it goes.
     for coord in _coordinators(hass):
         for vin, veh in (coord.vehicles or {}).items():
             if str(vin).startswith("_") or not isinstance(veh, dict):
                 continue
-            if vins and str(vin) not in vins:
+            if vins is not None and str(vin) not in vins:
                 continue
             if _vehicle_matches(condition_key, veh):
                 return True
