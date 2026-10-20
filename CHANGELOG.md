@@ -118,6 +118,35 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   that kept reappearing kept raising a fresh, un-ignored card at someone who
   had already said no. Nothing-found still deletes the stale card; all-skipped
   now leaves it alone.
+- **Plugged in and drawing nothing is no longer reported as charging.**
+  @plainmad ([#968](https://github.com/its-me-prash/vwgroup-connect-ha/issues/968))
+  runs a Golf GTE Mk8 whose energy provider smart-controls the session, and
+  captured the screen for the case nobody had: plugged in, charger supplying no
+  power. The app says *"Charging status. Battery charge level: 86 per cent.
+  Charging station shows current status"*, and we answered **charging** — as we
+  did for *"Battery 86 % • Check charging station"* and for the button
+  *"Start charging. Check charging status"*.
+
+  The rule ended in a bare-verb search: the word "Charging" (or "Lädt" /
+  "Wird geladen") anywhere in the label meant yes, with a list of explicit
+  not-charging phrasings in front of it. That list cannot be completed — app
+  4.3.2 needed one entry, 4.6.4 needs another, and "Start charging" was never
+  covered at all.
+
+  It now reads the state where the state is. Every dump we hold has one
+  grammar, *"Charging status. … N per cent. `<STATE>`"* plus a compact tile
+  whose state follows the separator, and the extracted clause decides. The bare
+  verb counts only as a complete clause — which is the whole distinction,
+  because the ID.3 on 4.3.2 writes the state as the bare word on a car that
+  really is charging. Wording we do not recognise returns unknown rather than
+  guessing, so the previous reading is left alone instead of being replaced by
+  a confident wrong one.
+
+  Measured over all seventeen battery fixtures: every label with a recorded
+  expectation now comes out right, against four wrong before, and about twenty
+  settings-screen labels ("Charging up to (50-100%)", "Reduced AC charging
+  current") stop reading as charging. His dump is committed as a fixture, with
+  his attribution.
 - **The test-cohort share prompt no longer goes to entries that cannot produce
   a capture, and a probe that fails now says so.** @bzykcar
   ([#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805))
