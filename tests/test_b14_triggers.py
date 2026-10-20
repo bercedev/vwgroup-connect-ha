@@ -184,12 +184,18 @@ def test_resolve_target_vins_from_option() -> None:
     assert trig._resolve_target_vins(MagicMock(), cfg) == {"V2"}
 
 
-def test_resolve_target_vins_empty_when_unset() -> None:
+def test_resolve_target_vins_none_when_unset() -> None:
+    """Nothing asked for is None, not an empty set.
+
+    It used to be an empty set, and so was "asked for a scope and resolved to
+    no vehicle" -- the two outcomes were indistinguishable and both callers
+    read them as "all vehicles". None now means only the first.
+    """
     from custom_components.vag_connect import trigger as trig
     cfg = SimpleNamespace(options=None, target=None)
-    assert trig._resolve_target_vins(MagicMock(), cfg) == set()
-    # a differently-shaped (experimental) config degrades to "all vehicles"
-    assert trig._resolve_target_vins(MagicMock(), object()) == set()
+    assert trig._resolve_target_vins(MagicMock(), cfg) is None
+    # a differently-shaped (experimental) config still degrades to "all vehicles"
+    assert trig._resolve_target_vins(MagicMock(), object()) is None
 
 
 def test_resolve_target_vins_from_device_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -204,9 +210,12 @@ def test_resolve_target_vins_from_device_id(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(trig.dr, "async_get", lambda hass: registry)
     cfg = SimpleNamespace(options=None, target={"device_id": ["dev2"]})
     assert trig._resolve_target_vins(MagicMock(), cfg) == {"V2"}
-    # unknown device id resolves to nothing, not an error
+    # An unknown device id resolves to nothing, not an error -- and to an EMPTY
+    # SET rather than None, because a scope WAS requested. That distinction is
+    # what stops the caller falling back to every vehicle on the account.
     registry.async_get.return_value = None
     assert trig._resolve_target_vins(MagicMock(), cfg) == set()
+    assert trig._resolve_target_vins(MagicMock(), cfg) is not None
 
 
 def test_vin_option_validated_and_uppercased() -> None:

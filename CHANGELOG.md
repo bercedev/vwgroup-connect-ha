@@ -530,6 +530,29 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   before cancelling, which is what the test's own name claims it does. No
   production code changed; the behaviour it guards is unaltered.
 
+- **A trigger or condition scoped to one car no longer applies to every car on
+  the account when the scope cannot be resolved.** The helper that turns a
+  config's `vin:` option or `target: device_id` into a set of VINs returned an
+  empty set for four different situations and documented one of them: nothing
+  was asked for; a config shape we cannot read; a `device_id` the registry no
+  longer knows, which is what a car removed and re-added leaves behind; and a
+  `target:` expressed with any other field, such as an area or a label.
+
+  Both callers then failed open on all four. The trigger ended up subscribing
+  with `vin=None`, which is the account-wide listener the dispatcher fires for
+  every VIN, and the condition's `if vins and …` guard is skipped entirely on a
+  falsy empty set, so every vehicle was tested. The two cases that say *"I meant
+  one car"* therefore did the opposite of what was asked, and said nothing about
+  it — an automation written to unlock-trigger on one car ran for all of them.
+
+  The helper now answers three ways instead of two: nothing asked for, a
+  resolved scope, or **asked and resolved to nothing** — and the last of those
+  matches nothing rather than everything. It also logs a warning naming the
+  target that could not be resolved, because an automation that has been firing
+  account-wide by accident would otherwise just stop one day with no
+  explanation. Unscoped triggers and conditions are untouched and still apply
+  to every vehicle, which is their documented behaviour.
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
