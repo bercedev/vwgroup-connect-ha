@@ -1,0 +1,74 @@
+NODE	0	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=	text=	desc=	state=	checked=false
+NODE	1	0	0	1080	2340	class=android.widget.LinearLayout	vis=true	id=	text=	desc=	state=	checked=false
+NODE	2	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=	text=	desc=	state=	checked=false
+NODE	3	0	0	1080	2340	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/action_bar_root	text=	desc=	state=	checked=false
+NODE	4	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=android:id/content	text=	desc=	state=	checked=false
+NODE	5	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/nav_host_fragment	text=	desc=	state=	checked=false
+NODE	6	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/nav_host_fragment	text=	desc=	state=	checked=false
+NODE	7	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/bottom_nav_root	text=	desc=	state=	checked=false
+NODE	8	0	0	1080	2340	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/nav_host_container	text=	desc=	state=	checked=false
+NODE	9	0	0	1080	2064	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/bottom_nav_host_fragment	text=	desc=	state=	checked=false
+NODE	10	0	0	1080	2064	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/bottom_nav_host_fragment	text=	desc=	state=	checked=false
+NODE	11	0	0	1080	2064	class=android.view.ViewGroup	vis=true	id=com.volkswagen.weconnect:id/container	text=	desc=	state=	checked=false
+NODE	12	0	0	1080	2064	class=androidx.compose.ui.platform.ComposeView	vis=true	id=com.volkswagen.weconnect:id/composeView	text=	desc=	state=	checked=false
+NODE	13	0	0	1080	2064	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	14	0	0	1080	2064	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	15	0	208	1080	2064	class=android.widget.ScrollView	vis=true	id=	text=	desc=	state=	checked=false
+NODE	16	53	261	1027	428	class=android.widget.TextView	vis=true	id=	text=Please choose when you’d like your vehicle to be charged and/or air conditioned to your preferred temperature.	desc=	state=	checked=false
+NODE	16	53	512	1027	827	class=android.view.View	vis=false	id=	text=	desc=	state=	checked=false
+NODE	17	53	512	1027	827	class=android.view.View	vis=true	id=	text=	desc=6:00 AM	state=	checked=false
+NODE	18	53	607	1027	733	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	18	338	512	400	827	class=android.widget.SeekBar	vis=true	id=	text=	desc=Hour	range=60005.0/0.0/119999.0	state=06	checked=false
+NODE	18	453	638	467	702	class=android.widget.TextView	vis=false	id=	text=:	desc=	state=	checked=false
+NODE	18	520	512	582	827	class=android.widget.SeekBar	vis=true	id=	text=	desc=Minute	range=60000.0/0.0/119999.0	state=00	checked=false
+NODE	18	666	512	742	827	class=android.widget.SeekBar	vis=true	id=	text=	desc=AM PM	range=0.0/0.0/1.0	state=AM	checked=false
+NODE	16	53	912	1027	1010	class=android.view.View	vis=true	id=editDepartureTimerWeekday	text=	desc=	state=	checked=false
+NODE	17	39	898	165	1024	class=android.view.View	vis=true	id=cta_MONDAY	text=	desc=	state=	checked=false
+NODE	18	77	939	128	984	class=android.widget.TextView	vis=true	id=	text=Mo	desc=	state=	checked=false
+NODE	17	185	898	311	1024	class=android.view.View	vis=true	id=cta_TUESDAY	text=	desc=	state=	checked=false
+NODE	18	230	939	267	984	class=android.widget.TextView	vis=true	id=	text=Tu	desc=	state=	checked=false
+NODE	17	331	898	457	1024	class=android.view.View	vis=true	id=cta_WEDNESDAY	text=	desc=	state=	checked=false
+NODE	18	368	939	421	984	class=android.widget.TextView	vis=true	id=	text=We	desc=	state=	checked=false
+NODE	17	477	898	603	1024	class=android.view.View	vis=true	id=cta_THURSDAY	text=	desc=	state=	checked=false
+NODE	18	520	939	561	984	class=android.widget.TextView	vis=true	id=	text=Th	desc=	state=	checked=false
+NODE	17	623	898	749	1024	class=android.view.View	vis=true	id=cta_FRIDAY	text=	desc=	state=	checked=false
+NODE	18	670	939	702	984	class=android.widget.TextView	vis=true	id=	text=Fr	desc=	state=	checked=false
+NODE	17	769	898	895	1024	class=android.view.View	vis=true	id=cta_SATURDAY	text=	desc=	state=	checked=false
+NODE	18	813	939	851	984	class=android.widget.TextView	vis=true	id=	text=Sa	desc=	state=	checked=false
+NODE	17	915	898	1041	1024	class=android.view.View	vis=true	id=cta_SUNDAY	text=	desc=	state=	checked=false
+NODE	18	959	939	998	984	class=android.widget.TextView	vis=true	id=	text=Su	desc=	state=	checked=false
+NODE	16	53	1074	1027	1447	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	17	53	1074	1027	1447	class=android.view.View	vis=true	id=editDepartureTimerRepeat	text=	desc=	state=	checked=false
+NODE	18	222	1133	356	1184	class=android.widget.TextView	vis=true	id=	text=Repeat	desc=	state=	checked=false
+NODE	18	837	1096	974	1222	class=android.view.View	vis=true	id=	text=	desc=	state=On	checked=true
+NODE	19	837	1096	974	1222	class=android.view.View	vis=true	id=	text=	desc=	state=On	checked=true
+NODE	20	869	1097	995	1223	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	20	837	1117	974	1201	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	19	837	1106	974	1211	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	18	222	1243	942	1394	class=android.widget.TextView	vis=true	id=	text=By the scheduled departure time, your vehicle will be air conditioned automatically to your chosen temperature of 22.0°C.	desc=	state=	checked=false
+NODE	15	0	82	1080	208	class=android.view.View	vis=true	id=	text=	desc=	state=	checked=false
+NODE	16	22	82	148	208	class=android.widget.Button	vis=true	id=	text=	desc=	state=	checked=false
+NODE	16	137	116	943	173	class=android.view.View	vis=true	id=	text=	desc=Set time	state=	checked=false
+NODE	9	0	2064	1080	2064	class=androidx.compose.ui.platform.ComposeView	vis=false	id=com.volkswagen.weconnect:id/compose_bottom_sheet	text=	desc=	state=	checked=false
+NODE	10	0	2064	0	2064	class=android.view.View	vis=false	id=	text=	desc=	state=	checked=false
+NODE	8	0	2064	1080	2340	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/bottom_navigation_container	text=	desc=	state=	checked=false
+NODE	9	0	2064	1080	2067	class=android.view.View	vis=true	id=com.volkswagen.weconnect:id/separator	text=	desc=	state=	checked=false
+NODE	9	0	2067	1080	2214	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/bottom_navigation_view	text=	desc=	state=	checked=false
+NODE	10	0	2088	1080	2193	class=android.view.ViewGroup	vis=true	id=	text=	desc=	state=	checked=false
+NODE	11	0	2088	360	2193	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/vehicle_tab_navigation	text=	desc=Vehicle Tab	state=	checked=false
+NODE	12	148	2109	211	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_content_container	text=	desc=	state=	checked=false
+NODE	13	148	2109	211	2172	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_container	text=	desc=	state=	checked=false
+NODE	14	148	2109	211	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_inner_content_container	text=	desc=	state=	checked=false
+NODE	15	148	2109	211	2172	class=android.widget.ImageView	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_view	text=	desc=	state=	checked=false
+NODE	11	360	2088	720	2193	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/cat_nav_map_tab_navigation	text=	desc=Map Tab	state=	checked=false
+NODE	12	508	2109	571	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_content_container	text=	desc=	state=	checked=false
+NODE	13	508	2109	571	2172	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_container	text=	desc=	state=	checked=false
+NODE	14	508	2109	571	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_inner_content_container	text=	desc=	state=	checked=false
+NODE	15	508	2109	571	2172	class=android.widget.ImageView	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_view	text=	desc=	state=	checked=false
+NODE	11	720	2088	1080	2193	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/profile_tab_navigation	text=	desc=Profile Tab	state=	checked=false
+NODE	12	868	2109	931	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_content_container	text=	desc=	state=	checked=false
+NODE	13	868	2109	931	2172	class=android.widget.FrameLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_container	text=	desc=	state=	checked=false
+NODE	14	868	2109	931	2172	class=android.widget.LinearLayout	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_inner_content_container	text=	desc=	state=	checked=false
+NODE	15	868	2109	931	2172	class=android.widget.ImageView	vis=true	id=com.volkswagen.weconnect:id/navigation_bar_item_icon_view	text=	desc=	state=	checked=false
+NODE	1	0	2214	1080	2340	class=android.view.View	vis=true	id=android:id/navigationBarBackground	text=	desc=	state=	checked=false
+END

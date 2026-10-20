@@ -29,7 +29,7 @@ from dataclasses import dataclass
 
 from .screen import UiNode
 
-CHARGE_TARGET_APP_VERSIONS = ("4.6.4", "4.3.2")
+CHARGE_TARGET_APP_VERSIONS = ("4.8.1", "4.6.4", "4.3.2")
 TARGET_MIN = 50
 TARGET_MAX = 100
 TARGET_STEP = 10

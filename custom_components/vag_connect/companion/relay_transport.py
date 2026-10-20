@@ -26,6 +26,10 @@ _LOGGER = logging.getLogger(__name__)
 class AgentRelayTransport(NetworkAdbTransport):
     """Drives the phone through its agent's outbound poll."""
 
+    # No file push and no arbitrary shell: the 4.8.1 departure editor helper
+    # cannot run here, so that edit is refused before the page is touched.
+    can_read_hidden_nodes = False
+
     def __init__(
         self, broker: CompanionRelayBroker, *, wake_sleep: bool = False,
         close_app: bool = False,

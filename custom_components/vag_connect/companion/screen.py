@@ -52,6 +52,7 @@ class UiNode:
     # The departure timer's weekday buttons (``cta_monday`` …) say whether a
     # day is on only through ``selected``.
     selected: bool = False
+    scrollable: bool = False
 
     @property
     def tap_point(self) -> tuple[int, int] | None:
@@ -108,6 +109,7 @@ def parse_ui_dump(xml: str) -> list[UiNode]:
                 checked=a.get("checked", "false") == "true",
                 enabled=a.get("enabled", "true") == "true",
                 selected=a.get("selected", "false") == "true",
+                scrollable=a.get("scrollable", "false") == "true",
             )
         )
     return out
