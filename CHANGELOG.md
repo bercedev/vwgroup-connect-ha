@@ -74,6 +74,30 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   nothing to re-add, the car simply has not reported. All twelve languages
   ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
 
+- **An unmappable field stops asking three different people to file it, and
+  dismissing the Scout card now sticks.** `eu_data_act.jobStatus` raised the
+  user-facing Scout repair three times — on Volkswagen
+  ([#1831](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1831)), on
+  an ID.7 Tourer GTX
+  ([#1838](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1838)) and
+  on a CUPRA Tavascan
+  ([#1861](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1861)).
+  The field is genuinely unmapped: the shipped catalogue has no entry for it at
+  all. It is now kept out of the repair while staying fully visible in
+  diagnostics — the samples (`JOBSTATUS_FLASHING`, `JOBSTATUS_DONE`) could be
+  portal export-job plumbing or a software-flash job running on the car, and
+  suppressing the data would close that question instead of answering it.
+
+  Two faults turned up while doing it. The skip list was matched
+  case-sensitively against a lower-case set, so adding the field as it is
+  spelled by anyone would have skipped nothing while the list looked like it
+  covered it. And the card was **deleted** whenever every finding was skipped,
+  which is not the same as having no findings: Home Assistant stores a
+  dismissal on the issue entry and deleting the entry discards it, so a field
+  that kept reappearing kept raising a fresh, un-ignored card at someone who
+  had already said no. Nothing-found still deletes the stale card; all-skipped
+  now leaves it alone.
+
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
 
