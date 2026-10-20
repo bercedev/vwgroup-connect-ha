@@ -35,7 +35,10 @@ import pytest
 from custom_components.vag_connect.cariad.auth._website_authproxy import (
     WebsiteAuthProxyConnector,
 )
-from custom_components.vag_connect.cariad.exceptions import AuthenticationError
+from custom_components.vag_connect.cariad.exceptions import (
+    AuthenticationError,
+    AuthProxyUnavailableError,
+)
 
 PORTAL_OK = "https://www.volkswagen.de/de/besitzer-und-nutzer/myvolkswagen.html"
 HOOK = "https://consent.vwgroup.io/hooks/data-clean-room?session=S1&state=ST"
@@ -262,11 +265,24 @@ class TestTheEmailCodePathDeclinesTheHookToo:
         assert sess.requested == [], "nothing may be fetched for a refused code"
 
     def test_an_http_error_on_the_code_post_still_raises(self) -> None:
+        """The decline runs in FRONT of the rejection check, so the thing to
+        pin here is that an error page is not quietly turned into a session.
+
+        The class changed in #1843: a 500 while the code is being checked is
+        the site failing, not a wrong code, and it is raised as the class that
+        already says so. The assertion is deliberately the specific class and
+        not a bare ``Exception`` -- a test that accepts any exception would
+        pass again the day this collapses back into one verdict, which is the
+        defect #1843 fixed.
+        """
         sess = _PostSession([("https://identity.vwgroup.io/u/oops", 500, "")])
         c = _otp_client(sess)
-        with pytest.raises(AuthenticationError):
+        with pytest.raises(AuthProxyUnavailableError, match="server-side"):
             asyncio.run(c.submit_otp("123456"))
         assert c.logged_in is False
+        # and it is NOT the auth class, which the flows map to a verdict about
+        # the user's credentials.
+        assert not issubclass(AuthProxyUnavailableError, AuthenticationError)
 
     def test_a_hook_served_with_an_error_status_is_still_declined(self) -> None:
         """The case that makes the ORDER load-bearing rather than tidy.
