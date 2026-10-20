@@ -91,7 +91,7 @@ async def main(email: str) -> int:
 
     connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
     async with aiohttp.ClientSession(connector=connector) as session:
-        conn = WebsiteAuthProxyConnector(session, email, password, brand="volkswagen")
+        conn = WebsiteAuthProxyConnector(session, email, password)
         print("[*] Signing in to volkswagen.de …", flush=True)
         try:
             step = await conn.begin_login()

@@ -46,6 +46,27 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Geändert / Changed
+
+- **Removed a constructor argument that looked like multi-brand support and
+  did nothing.** While answering @bzykcar's question in
+  [#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805) —
+  whether any sign-in path is left that would reach the manufacturer channel
+  for an Audi — the volkswagen.de connector turned out to accept a `brand`
+  argument, and the runtime passed each entry's *real* brand into it. The value
+  was stored on the instance and never read again, by anything. The connector
+  is volkswagen.de in every path it has, so an Audi routed through it would
+  have signed in to the Volkswagen site successfully, and anyone treating the
+  argument as an Audi lever would have watched that work and believed it.
+
+  A missing parameter is a question you have to answer; a dead one is an answer
+  you can believe. Both it and a second never-read copy of the session object
+  beside it are gone. Supporting another brand here needs a real
+  implementation, and it will come back with one.
+
+  No behaviour changes for any existing entry: every call site already received
+  the Volkswagen site regardless of what it passed.
+
 ### Behoben / Fixed
 
 - **The "vehicle data hasn't refreshed" warning now says which car, and stops
