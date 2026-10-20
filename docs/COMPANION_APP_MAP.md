@@ -327,3 +327,30 @@ removed from the HA registry on 2026-10-06: `sensor.<car>_vehicle_requests`
 - **D3, driving data:** a new opt-in nav read (gszigethy/vwgroup-connect-ha#16).
 - **D4, health warnings:** read into the warning fields (gszigethy/vwgroup-connect-ha#14).
 - **D5, stale entities:** removed.
+
+
+## VW 4.8.1 (16 and 17 October 2026)
+
+Checked on a Tiguan eHybrid with the app in English on a 12-hour clock. Every
+read on 4.8.1 was compared with the app; every command was then sent once to
+the car through the integration's own code, read back, and put back. The
+4.3.2 and 4.6.4 fixtures and adapters are unchanged.
+
+| Area | 4.8.1 change | Handling |
+|---|---|---|
+| Parking | *Vehicle location* is a label inside a clickable button, not clickable itself. | The finder taps the smallest clickable node around the label that holds no other label (never the map itself). |
+| Driving data | A third card, *Last long-haul trip*, and a carousel that can open on any card. | Single, long-haul and refuel/charging cards are read separately, with at most two swipes each way; the first read sweeps both ends and remembers the cards, again daily. Long-haul values go to Companion-only fields `companion_long_trip_*`. |
+| Departure list | Same rows; recurrence label per row. | Time, on/off and weekdays from the list; switching a timer on/off as before. |
+| Departure editor | Rebuilt in Compose. The time picker is hidden (`hideFromAccessibility`), the day buttons (`cta_MONDAY` …) have no selected state. | Repeat from the page; the time from the hidden wheels through the a11y helper, which also sets them (`SET_PROGRESS`), read back before Save. Days come from the list label and are not changed on 4.8.1, since the page cannot show them before Save. See [COMPANION.md](COMPANION.md#departure-editor-on-481). |
+| Charging locations | No change seen; this account's app shows no locations. | Reads nothing, as before when none exist. |
+| Climate sheet and settings, charge sheet, vehicle Settings, Vehicle Health | Same ids and layout. | Unchanged. |
+
+Commands verified live on 4.8.1 (one request each, at least a minute apart,
+undone afterwards): start and stop charging, the charge target (80 → 90 → 80 %),
+climate start and stop, the dial on start (22.5 °C) and on a running air
+conditioning (22 °C), window heating alone through the mode picker, climate at
+unlock, automatic window heating, a climate zone, *Synchronise now*, a departure
+timer on and off, and a departure timer edit (time and Repeat, saved and read
+back; a day change was also saved and read back live, but is refused in code
+because it cannot be checked before Save). 4.8.1 is listed per command, not in the preset's read
+list, so builds between 4.6.4 and 4.8.1 keep their reads.

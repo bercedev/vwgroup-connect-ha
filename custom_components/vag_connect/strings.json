@@ -707,6 +707,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Last Trip Average Electric Consumption"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Last Long-Haul Trip Distance"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Last Long-Haul Trip Duration"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Last Long-Haul Trip Average Speed"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Last Long-Haul Trip Average Fuel Consumption"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Last Long-Haul Trip Average Electric Consumption"
+      },
       "software_version": {
         "name": "Software Version"
       },

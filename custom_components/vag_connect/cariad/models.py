@@ -1509,6 +1509,12 @@ class VehicleData:
     departure_timer_2_time: str | None = None
     departure_timer_3_enabled: bool = False
     departure_timer_3_time: str | None = None
+    # Companion only — the VW app's "Last long-haul trip" card, never a cloud field.
+    companion_long_trip_distance_km: float | None = None
+    companion_long_trip_duration_min: int | None = None
+    companion_long_trip_avg_speed_kmh: float | None = None
+    companion_long_trip_avg_fuel_consumption_l_100km: float | None = None
+    companion_long_trip_avg_electric_consumption_kwh_100km: float | None = None
     # Companion only — charging locations in the VW app, never cloud profiles.
     charging_location_count: int | None = None
     charging_location_current: str | None = None

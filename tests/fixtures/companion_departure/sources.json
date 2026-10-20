@@ -34,5 +34,33 @@
     "contributor": "gszigethy",
     "original_file": "phone-ui-capture-4.6.4/departure-trace/t1045-2-slot2.xml",
     "note": "Timer 2's Set time page from the same trace: 10:50 AM, Th selected, Repeat off."
+  },
+  {
+    "fixture": "slot1_481.xml",
+    "contributor": "gszigethy",
+    "note": "Read-only ADB capture, 2026-10-16, Tiguan eHybrid, VW 4.8.1, English 12-hour clock. Editor left with BACK; no schedule changes. No personal identifiers on screen."
+  },
+  {
+    "fixture": "list_481.xml",
+    "contributor": "gszigethy",
+    "note": "Read-only ADB capture, 2026-10-16, Tiguan eHybrid, VW 4.8.1, English 12-hour clock. Editor left with BACK; no schedule changes. No personal identifiers on screen."
+  },
+  {
+    "fixture": "list_edit_481.xml",
+    "contributor": "gszigethy",
+    "original_file": "scratchpad editor481/list.xml",
+    "note": "Departure times list, 2026-10-17, @gszigethy (Tiguan eHybrid, app 4.8.1, English, 12-hour clock): 07:20 AM Weekdays on, 04:00 PM Weekdays off, 06:00 AM Saturday off. No charging locations. Navigation only."
+  },
+  {
+    "fixture": "slot3_481.xml",
+    "contributor": "gszigethy",
+    "original_file": "scratchpad editor481/slot3.xml",
+    "note": "Timer 3's Compose editor from the same walk (uiautomator): the picker is hidden; day buttons cta_MONDAY..cta_SUNDAY without state; Repeat on. Left with BACK, nothing changed."
+  },
+  {
+    "fixture": "slot3_481_a11y.txt",
+    "contributor": "gszigethy",
+    "original_file": "scratchpad editor481/slot3_a11y.txt",
+    "note": "The same screen from companion/a11y/A11yTree (hidden nodes included): wheels Hour 06 (60005), Minute 00 (60000), AM PM AM (0 of 0..1)."
   }
 ]

@@ -587,6 +587,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Dernier Trajet — Conso. Électrique Moyenne"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Dernier Long Trajet — Distance"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Dernier Long Trajet — Durée"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Dernier Long Trajet — Vitesse Moyenne"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Dernier Long Trajet — Conso. Carburant Moyenne"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Dernier Long Trajet — Conso. Électrique Moyenne"
+      },
       "software_version": {
         "name": "Version Logicielle"
       },
