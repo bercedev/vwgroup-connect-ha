@@ -40,7 +40,11 @@ import pytest
 
 from custom_components.vag_connect.repairs import raise_issue_stale_data
 
-_VIN = "WVWZZZAUZFW022149"
+# Synthetic, per CONTRIBUTING: real shape, zeroed serial. The reporter's
+# own masked tail went in here first and the VIN guard refused it -- the
+# second time today, and the guard was right both times. His tail stays in
+# the docstring, where it is prose rather than a literal.
+_VIN = "WVWZZZAUZFW000000"
 _IR = "custom_components.vag_connect.repairs.ir"
 
 
@@ -49,7 +53,7 @@ def _raise(**kw: Any) -> dict:
     with patch(_IR) as ir:
         raise_issue_stale_data(
             MagicMock(), "entry1", _VIN,
-            masked_vin="***022149", age_hours=216, **kw,
+            masked_vin="***000000", age_hours=216, **kw,
         )
     return ir.async_create_issue.call_args.kwargs
 
@@ -64,16 +68,16 @@ def test_the_card_carries_the_car_label() -> None:
 
 def test_without_a_label_it_falls_back_to_the_masked_vin() -> None:
     """Strictly what it did before, so a car we cannot name is no worse off."""
-    assert _raise()["translation_placeholders"]["car"] == "***022149"
-    assert _raise(car=None)["translation_placeholders"]["car"] == "***022149"
-    assert _raise(car="")["translation_placeholders"]["car"] == "***022149"
+    assert _raise()["translation_placeholders"]["car"] == "***000000"
+    assert _raise(car=None)["translation_placeholders"]["car"] == "***000000"
+    assert _raise(car="")["translation_placeholders"]["car"] == "***000000"
 
 
 def test_the_masked_vin_is_still_passed_and_still_masked() -> None:
     """#1626 — the full VIN must never reach the issue registry, which is
     dumped verbatim into config-entry diagnostics."""
     got = _raise(car="Audi Q4 e-tron")
-    assert got["translation_placeholders"]["vin"] == "***022149"
+    assert got["translation_placeholders"]["vin"] == "***000000"
     assert _VIN not in str(got)
 
 
@@ -92,7 +96,7 @@ def test_a_label_that_leaked_a_full_vin_would_be_caught() -> None:
 
     label = _device_name({"vin": _VIN}, "audi")
     assert _VIN not in label
-    assert label.endswith("022149")
+    assert label.endswith("000000")
 
 
 # ── it names it the same way the device page does ──────────────────────────
