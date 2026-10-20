@@ -325,6 +325,34 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   the two things this line must never grow
   ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
 
+- **Diagnostics now name the portal field a value came from, not only the
+  channel.** @Joassens reported a Passat GTE whose fuel level sat at exactly
+  100 % across 467 km of driving while the tank went to half, killed his own
+  "stale because I hadn't burned any fuel" theory with the odometer, and ended
+  with the sentence this change exists for: *"I can't tell which from
+  diagnostics, since they don't include the raw portal field."*
+
+  He was right, and nothing in the file could have told him. The portal parser
+  reads most fields from a list of candidate leaf names, first present wins —
+  the fuel level alone has five. `field_sources` recorded which *channel* won
+  and `field_captured_ts` when the car measured it; neither recorded which
+  *leaf* won. Elimination could not recover it either, because `first()` marks
+  every candidate of a call as consumed along with their walker synonyms, so all
+  five vanish from the unmapped-field list together. And the function that
+  stashes the provenance was already being handed the chosen leaf — it used it
+  to look up a timestamp and then discarded the name.
+
+  It is kept now, as `field_source_leaf`, following the same path as its two
+  siblings: never gap-filled field by field, rebuilt in the channel merge from
+  whichever channel owns the surviving value, and carried with the value through
+  a historical import. That last part is the one with teeth — a leaf name that
+  outlived the value it described would blame a portal field for a reading that
+  came from somewhere else, which is worse than recording nothing, so a test
+  measures a merge where one field keeps its leaf and another loses it in the
+  same pass. The fuel level, having now been disputed by two reporters, was also
+  added to the handful of fields that record their provenance at all
+  ([#465](https://github.com/its-me-prash/vwgroup-connect-ha/issues/465)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a

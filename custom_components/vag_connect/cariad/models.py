@@ -1991,6 +1991,20 @@ class VehicleData:
     # 78 vs 92") so a reading's uncertainty is visible per entity. Empty on the
     # vast majority of polls. Same skip/carry handling as field_captured_ts.
     ambiguous_fields: dict[str, str] = field(default_factory=dict)
+    # #465 (@Joassens) — the NAME of the EU-DA source leaf the mapper resolved
+    # onto each attribute. ``field_sources`` says which CHANNEL a value came
+    # from and ``field_captured_ts`` says when the car measured it; neither
+    # says which of the candidate leaf names actually won, and the mapper reads
+    # most fields from a list of aliases, first present wins. So a value that
+    # is plainly wrong could not be traced to the field that produced it: he
+    # reported a PHEV's fuel level pinned at exactly 100 % across 467 km and
+    # ended with "I can't tell which from diagnostics, since they don't include
+    # the raw portal field". Nor could elimination settle it — ``first()``
+    # marks EVERY candidate of a call used, plus their walker synonyms, so all
+    # of them vanish from ``raw_unmapped_fields`` together. ``_record`` is
+    # handed the chosen leaf already and was throwing the name away. Same
+    # skip/carry handling as field_captured_ts.
+    field_source_leaf: dict[str, str] = field(default_factory=dict)
 
     # ── v2.15.1 — EU Data Act + BFF wire-key mapping (2.15.0 plan) ──────────
     # New fields declared once on the shared model; each is written by the EU

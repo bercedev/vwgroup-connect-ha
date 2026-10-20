@@ -147,7 +147,7 @@ def _values_moved(
 #: Side maps that describe WHERE a snapshot value came from and WHEN the car
 #: captured it. They are ordinary keys in the snapshot dict, which is why the
 #: gap-fill below has to treat them specially.
-_PROVENANCE_MAPS = ("field_sources", "field_captured_ts")
+_PROVENANCE_MAPS = ("field_sources", "field_captured_ts", "field_source_leaf")
 
 
 def _gap_fill_from_export(

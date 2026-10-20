@@ -50,7 +50,7 @@ _SKIP_FIELDS = frozenset(
      # ts onto a field a different channel owns). merge_channels rebuilds them from
      # the final ``field_sources`` instead, so the ts always tracks the surviving
      # value.
-     "field_captured_ts", "ambiguous_fields",
+     "field_captured_ts", "ambiguous_fields", "field_source_leaf",
      "no_data", "has_battery",
      "has_combustion", "is_electric", "is_hybrid"}
 )
@@ -299,6 +299,7 @@ def merge_channels(
         name_to_vd.setdefault(nm, vd)
     captured_ts: dict[str, str] = {}
     ambiguous: dict[str, str] = {}
+    source_leaf: dict[str, str] = {}
     for f_name, owner in field_sources.items():
         owner_vd = name_to_vd.get(owner)
         if owner_vd is None:
@@ -308,6 +309,13 @@ def merge_channels(
             iso = src_ts.get(f_name)
             if isinstance(iso, str) and iso:
                 captured_ts[f_name] = iso
+        # #465 — rebuilt from the surviving owner exactly like the ts above,
+        # so a leaf name can never outlive the value it described.
+        src_leaf = getattr(owner_vd, "field_source_leaf", None)
+        if isinstance(src_leaf, dict):
+            leaf = src_leaf.get(f_name)
+            if isinstance(leaf, str) and leaf:
+                source_leaf[f_name] = leaf
         src_amb = getattr(owner_vd, "ambiguous_fields", None)
         if isinstance(src_amb, dict):
             note = src_amb.get(f_name)
@@ -315,6 +323,7 @@ def merge_channels(
                 ambiguous[f_name] = note
     merged.field_captured_ts = captured_ts
     merged.ambiguous_fields = ambiguous
+    merged.field_source_leaf = source_leaf
 
     # ``merged`` is fully independent: base was deep-copied (above) and every
     # gap-filled value was deep-copied on assignment, so no mutable field is
