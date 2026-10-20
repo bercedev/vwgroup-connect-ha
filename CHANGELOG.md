@@ -97,6 +97,25 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   that kept reappearing kept raising a fresh, un-ignored card at someone who
   had already said no. Nothing-found still deletes the stale card; all-skipped
   now leaves it alone.
+- **The e-mail code step no longer tells you your password is wrong.**
+  @kalwados added the volkswagen.de read channel, received the code by e-mail,
+  typed it, and was told *"Login failed; your username or password are wrong"* —
+  at a step he had only reached **because** his password was right. The code is
+  sent only after the credential check passes; the password is the one thing
+  that cannot be the problem there. He tried several times, gave up, signed in
+  on volkswagen.de in a browser, and only then could he add the channel.
+
+  A refused code now says the code was refused, in all 13 languages, and says
+  outright that the password is not the issue — on both the flow he used and
+  the setup flow a first-time install goes through, which had the same two
+  routes to the same wrong verdict and was found while tracing this one. And an HTTP error from the site
+  while the code is being checked is no longer reported as a bad code at all —
+  that is the site failing, and asking for a new code against a server that is
+  down cannot help. The sibling path at the password step was hardened for
+  exactly this in [#1313](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1313)
+  and [#1679](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1679)
+  ("only a genuine 401 keeps the credential verdict"); the code step never was.
+  ([#1843](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1843))
 
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
