@@ -65,7 +65,13 @@ def test_repair_issue_id_is_per_vin() -> None:
     assert create.call_args.args[2] == f"entryX_stale_data_{masked}"
     assert vin not in create.call_args.args[2]  # never the raw VIN
     assert kwargs["translation_key"] == "stale_data"
-    assert kwargs["translation_placeholders"] == {"vin": "…4567", "age": "80"}
+    # #1896 — ``car`` joined these: the title used to carry the masked VIN
+    # alone, which on a two-car account named nothing the owner recognised.
+    # With no label passed it falls back to the masked VIN, so this call
+    # (which passes none) produces what it always did, plus the new key.
+    assert kwargs["translation_placeholders"] == {
+        "car": "…4567", "vin": "…4567", "age": "80",
+    }
     assert kwargs["severity"] == repairs.ir.IssueSeverity.WARNING
     # raise clears the legacy raw-VIN id so a pre-fix repair does not linger
     assert f"entryX_stale_data_{vin}" in [c.args[2] for c in rdelete.call_args_list]

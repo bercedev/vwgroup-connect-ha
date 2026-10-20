@@ -46,6 +46,34 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Behoben / Fixed
+
+- **The "vehicle data hasn't refreshed" warning now says which car, and stops
+  sending everyone to volkswagen.de.** @starwarsfan runs an Audi Q4 e-tron and a
+  Škoda on one setup and got a card titled with the masked VIN alone —
+  `***022149` — which is recognisable only to someone who has gone and looked it
+  up. The warning told him something was wrong without telling him what. It now
+  names the vehicle the way the device page names it, through the same helper so
+  the two cannot drift apart, and falls back to the masked VIN when there is no
+  label, exactly as before.
+
+  The text was worse than the title. It told him to open **volkswagen.de** — he
+  has an Audi and a Škoda, and that instruction was wrong twice over: the wrong
+  site for a non-Volkswagen owner, and the wrong place even for a Volkswagen,
+  because a lapsed EU Data Act feed is fixed in the portal rather than on
+  volkswagen.de. His own reason for writing in is why that matters more than a
+  typo would: he did not want to touch a setup that was working. A card that
+  misdirects is a card that gets someone to break something that works.
+
+  The opening sentence also named the EU Data Act as one of exactly two possible
+  causes. This warning fires for **any** car whose own capture stamp has aged
+  past the threshold, including one read over a brand channel, where that cause
+  cannot apply at all. The opener is source-neutral now, and two short paragraphs
+  say what to do in each case: check the continuous request in the portal if the
+  car is read that way — and leave a working one alone — or, on a brand channel,
+  nothing to re-add, the car simply has not reported. All twelve languages
+  ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
+
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
 
