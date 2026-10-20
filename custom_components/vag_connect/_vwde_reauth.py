@@ -93,7 +93,7 @@ class VwDeReauthMixin:
             cookie_jar=aiohttp.CookieJar(unsafe=True),
         )
         self._ovw_connector = WebsiteAuthProxyConnector(
-            self._ovw_session, username, password, brand="volkswagen",
+            self._ovw_session, username, password,
         )
         try:
             result = await self._ovw_connector.begin_login()
