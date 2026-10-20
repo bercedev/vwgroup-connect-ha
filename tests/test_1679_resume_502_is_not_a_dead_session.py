@@ -75,7 +75,7 @@ class _Session:
 def _conn(session: _Session) -> WebsiteAuthProxyConnector:
     return WebsiteAuthProxyConnector(
         session,  # type: ignore[arg-type]  # a double, deliberately not wrapped
-        "someone@example.invalid", "pw", brand="volkswagen",
+        "someone@example.invalid", "pw",
     )
 
 

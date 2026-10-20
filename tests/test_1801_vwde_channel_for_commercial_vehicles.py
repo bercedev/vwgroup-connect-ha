@@ -161,16 +161,36 @@ def test_the_commercial_client_can_actually_arm_the_channel() -> None:
             is VWEUClient.arm_supplementary_authproxy)
 
 
-def test_the_login_identifies_itself_to_the_site_as_volkswagen() -> None:
-    """``brand="volkswagen"`` in the connector names *volkswagen.de*, not the
-    entry's brand. If that ever started following the entry, a Commercial entry
-    would hand the site a brand it does not know — which is exactly the kind of
-    breakage a widened gate could cause and nobody would look for.
+def test_the_login_cannot_follow_the_entrys_brand() -> None:
+    """The connector names *volkswagen.de*, never the entry's brand. A
+    Commercial entry must not hand the site a brand it does not know — exactly
+    the kind of breakage a widened gate could cause and nobody would look for.
+
+    This used to be checked by asserting the literal ``brand="volkswagen"`` was
+    present at this one call site. Two problems with that, both found in #1805:
+
+    * the argument was stored and never read, so the literal proved nothing
+      about what the site was told; and
+    * the thing the docstring feared **had already happened** at a call site
+      this test did not look at — the runtime path in ``cariad/api/base.py``
+      was passing ``brand=self._brand.name``, i.e. the entry's real brand.
+      Harmless only by accident, because nothing read it.
+
+    A test that guards one of four call sites is not guarding the property. So
+    the property is checked at the source now: the connector has no brand
+    parameter at all, which no call site can undo.
     """
     import inspect
 
     from custom_components.vag_connect import _vwde_reauth
+    from custom_components.vag_connect.cariad.auth._website_authproxy import (
+        WebsiteAuthProxyConnector,
+    )
+
+    assert "brand" not in inspect.signature(
+        WebsiteAuthProxyConnector.__init__
+    ).parameters, "a brand argument here can follow the entry again"
 
     src = inspect.getsource(_vwde_reauth.VwDeReauthMixin._ovw_begin_login)
-    assert 'brand="volkswagen"' in src
+    assert "brand" not in src
     assert "CONF_BRAND" not in src
