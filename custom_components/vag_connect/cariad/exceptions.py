@@ -708,6 +708,16 @@ class VehicleCommandError(CariadError):
             msg += f": {reason}"
         super().__init__(msg)
         self.command = command
+        #: #584 (@Joassens) — the reason, kept separately so the coordinator can
+        #: put it in the LOG as well as in the error Home Assistant surfaces.
+        #: It used to log the exception's class and HTTP status only, with a
+        #: comment explaining why: a raw ``str(err)`` can carry the VIN-bearing
+        #: command URL for other exception types that land in the same handler.
+        #: That reasoning is sound and stays — but it does not apply here. Every
+        #: reason in this class is prose written for the owner to read and is
+        #: already shown to them in the UI, so the one failure that bothered to
+        #: explain itself was the one the log file could not describe.
+        self.reason = reason
 
 
 class AuthProxyUnavailableError(CariadError):

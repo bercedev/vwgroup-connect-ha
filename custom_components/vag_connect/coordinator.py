@@ -9765,7 +9765,10 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 pass  # bookkeeping must never affect command outcome
             _LOGGER.debug("VW Group Connect: %s(%s) OK", method, mask_vin(vin))
         except Exception as err:  # noqa: BLE001
-            from .cariad.exceptions import classify_command_failure  # noqa: PLC0415
+            from .cariad.exceptions import (  # noqa: PLC0415
+                VehicleCommandError,
+                classify_command_failure,
+            )
 
             try:
                 reason = classify_command_failure(err)
@@ -9778,11 +9781,40 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 pass
             # class + status only — raw err str() can carry the VIN-path command
             # URL; the classified reason is already logged one branch up.
-            _LOGGER.error(
-                "VW Group Connect: %s(%s) failed: %s (status=%s)",
-                method, mask_vin(vin), type(err).__name__,
-                getattr(err, "status", None),
-            )
+            #
+            # #584 (@Joassens) — EXCEPT for a VehicleCommandError that carries
+            # its own reason. He read a refusal that explains itself in full in
+            # the UI ("the car's gateway accepted your S-PIN and then refused
+            # this integration's client identity…") and found the log file had
+            # only "VehicleCommandError (status=None)" for the same event. Every
+            # reason this class carries is prose written for the owner and
+            # already shown to them, so withholding it from the log protects
+            # nothing and costs the one reader who has only the log — which, on
+            # a command, is usually the person being asked for it.
+            # ``classify_command_failure``'s verdict goes out at INFO, a level
+            # many installs never record.
+            #
+            # The blanket rule above still holds for everything else, but note
+            # WHY: it is not about APIError, whose message has been redacted to
+            # ``<vin>`` since #1355 (``_redact_url`` in exceptions.py). It is
+            # about the arbitrary exceptions that also land in this handler —
+            # an aiohttp, httpx or adb-shell error whose ``str()`` nobody here
+            # has vetted and which can carry a full URL or response body.
+            _reason = getattr(err, "reason", "") if isinstance(
+                err, VehicleCommandError
+            ) else ""
+            if _reason:
+                _LOGGER.error(
+                    "VW Group Connect: %s(%s) failed: %s (status=%s) — %s",
+                    method, mask_vin(vin), type(err).__name__,
+                    getattr(err, "status", None), _reason,
+                )
+            else:
+                _LOGGER.error(
+                    "VW Group Connect: %s(%s) failed: %s (status=%s)",
+                    method, mask_vin(vin), type(err).__name__,
+                    getattr(err, "status", None),
+                )
             # b15 — a two-way primary (Audi BFF) that refuses a command with an
             # auth 401/403 (the shape a revoked device-grant takes) → try the
             # durable MBB fallback ONCE before surfacing, iff the user opted in
