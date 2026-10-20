@@ -74,6 +74,33 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   nothing to re-add, the car simply has not reported. All twelve languages
   ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
 
+- **The test-cohort share prompt no longer goes to entries that cannot produce
+  a capture, and a probe that fails now says so.** @bzykcar
+  ([#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805))
+  enabled the opt-in cohort on a portal-only Audi, to help, and reported that
+  `probe_outcomes` stayed empty. He was right, and two faults made it read that
+  way.
+
+  The prompt was gated on `hasattr(client, "command_captures")` — an attribute
+  created unconditionally in the base client's `__init__`, so it was true for
+  every brand and every auth strategy. The gate tested that a Python attribute
+  existed, not that a channel was reachable. The capture it asks for is written
+  inside the command confirm-poll, so an entry with no command path can never
+  produce one; he was asked to share something that could not exist. It now
+  consults `is_structural_read_only()`, this project's own answer to whether an
+  entry can send a command. A working Audi with no volkswagen.de channel still
+  gets the prompt, which is what that gate was added for, and SEAT/CUPRA keep
+  theirs through the locale-capture flag.
+
+  Separately, the three opt-in probes (position, state of health, range
+  measurements) caught every exception, wrote one debug line and recorded
+  nothing — so a probe that ran and was refused left `probe_outcomes` exactly as
+  empty as one that never attempted anything. Each now records
+  `error:<ExceptionType>` under its own key, the exception type only and never
+  the message, which can carry a host or a path. The core read twenty lines
+  below them already did this, which made their silence an inconsistency rather
+  than a design choice.
+
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
 

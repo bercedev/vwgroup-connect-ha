@@ -2916,6 +2916,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy parkingposition read skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["parkingposition"] = f"error:{type(exc).__name__}"
 
             # SoH probe (4.3.2 batteryHealthState) — same opt-in test-cohort gate as
             # the GPS probe. The app reads SoH via the attestation-walled BFF
@@ -2938,6 +2946,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy SoH probe skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["soh"] = f"error:{type(exc).__name__}"
 
             # #1357 (Ra72xx) — EXPERIMENTAL measurements/range probe, same opt-in test-
             # cohort gate as the GPS / SoH probes. A portal-only ID.3 surfaces a null
@@ -2963,6 +2979,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy measurements probe skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["measurements"] = f"error:{type(exc).__name__}"
 
             if got_data:
                 d.connection_state = "online"
