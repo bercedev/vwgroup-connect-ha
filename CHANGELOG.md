@@ -78,6 +78,37 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   outside-humidity reading, which comes off a different channel entirely, so a
   car reporting both will settle it ([#1863](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1863)).
 
+- **Volkswagen Companion (ADB): VW app 4.8.1 support.** The Companion's reads
+  and controls work again on VW app 4.8.1; departure time and Repeat edits need
+  a direct ADB connection, and weekday changes stay in the app. Developed and
+  checked on a Tiguan eHybrid in
+  [gszigethy/vwgroup-connect-ha](https://github.com/gszigethy/vwgroup-connect-ha)
+  (gszigethy/vwgroup-connect-ha#112, gszigethy/vwgroup-connect-ha#113,
+  gszigethy/vwgroup-connect-ha#115): each read was compared with the app, and
+  each control was sent once to the car through this code, read back and put
+  back. Thanks @gszigethy.
+  - **Commands on 4.8.1:** charging start/stop, the charge target, climate
+    start/stop, the temperature dial, window heating alone, climate at unlock,
+    automatic window heating, the climate zones, *Synchronise now*, and the
+    departure timers (on/off, time and Repeat). 4.8.1 is listed per command
+    after its own live test, not in the preset's read list, so app builds
+    between 4.6.4 and 4.8.1, which nobody has checked, keep their reads and
+    stay without commands.
+  - **Departure timer editor on 4.8.1.** The app rebuilt the timer page; its
+    time picker is hidden from `uiautomator` and its day buttons show no
+    state. A 6 kB helper (`companion/a11y/`, Java source and build steps
+    included, SHA-256 pinned) is pushed over ADB for the edit and removed
+    afterwards. It reads the hidden wheels and sets them with their own
+    accessibility action, so the time is checked before Save. A change of
+    weekdays cannot be checked before Save on this page, so it is refused
+    there (change the days in the app). The ADB Bridge add-on and the agent
+    relay cannot run the helper and refuse the edit before changing anything
+    on the page.
+  - **Last long-haul trip:** five new Companion-only sensors (distance,
+    duration, average speed, fuel and electric consumption) from the Driving
+    data card 4.8.1 added. They appear only on Companion entries once the card
+    was read, and are not mapped to any cloud or EU Data Act field.
+
 ### Geändert / Changed
 
 - **The volkswagen.de HTTP/2 channel now uses Home Assistant's own SSL context
@@ -98,6 +129,32 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   sanctioned route. Nothing changes for cars. Which context gets handed over
   is now pinned by a test that checks the object itself, rather than one that
   checked how it was built.
+
+- **The read-only volkswagen.de channel can now be added to a Volkswagen
+  Commercial Vehicles entry.** @benbrummer could not add it to a T6.1, and when
+  I went looking for the reason I expected to find one. The whole restriction
+  was a single equality check at the top of the sign-in step, comparing the
+  entry's brand against one exact string. Nothing downstream of it is
+  brand-specific: the connector identifies itself to the site as `volkswagen`
+  either way, because that names *volkswagen.de* rather than our brand list.
+  And the two brands are already treated as one thing where it matters most —
+  Commercial Vehicles uses the same We Connect app, and its EU Data Act
+  configuration is the Volkswagen one with a different state name. His own
+  report said the same from the outside: identical entity count and identical
+  values whether the van is set up as Volkswagen EU or as Commercial Vehicles.
+
+  What is still not established is whether volkswagen.de serves a Commercial
+  VIN once the sign-in is allowed to start. That is a question about VW's site,
+  and the gate was the thing preventing anyone from asking it; the channel is
+  read-only, so the cost of being wrong is a failed sign-in the owner sees at
+  once rather than anything silent. If Commercial VINs turn out not to be
+  served, the gate comes back — this time with a reason attached to it. Every
+  other brand is still refused, the abort text is unchanged so its twelve
+  translations stay accurate, and a test checks that the commercial client
+  really does inherit the arming method, because a widened gate that handed
+  someone a channel which is stored, shown as configured and never armed would
+  be a worse outcome than the refusal it replaces
+  ([#1801](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1801)).
 
 ### Behoben / Fixed
 
@@ -324,6 +381,123 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   error object also holds the request address and the response body, which are
   the two things this line must never grow
   ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
+
+- **Diagnostics now name the portal field a value came from, not only the
+  channel.** @Joassens reported a Passat GTE whose fuel level sat at exactly
+  100 % across 467 km of driving while the tank went to half, killed his own
+  "stale because I hadn't burned any fuel" theory with the odometer, and ended
+  with the sentence this change exists for: *"I can't tell which from
+  diagnostics, since they don't include the raw portal field."*
+
+  He was right, and nothing in the file could have told him. The portal parser
+  reads most fields from a list of candidate leaf names, first present wins —
+  the fuel level alone has five. `field_sources` recorded which *channel* won
+  and `field_captured_ts` when the car measured it; neither recorded which
+  *leaf* won. Elimination could not recover it either, because `first()` marks
+  every candidate of a call as consumed along with their walker synonyms, so all
+  five vanish from the unmapped-field list together. And the function that
+  stashes the provenance was already being handed the chosen leaf — it used it
+  to look up a timestamp and then discarded the name.
+
+  It is kept now, as `field_source_leaf`, following the same path as its two
+  siblings: never gap-filled field by field, rebuilt in the channel merge from
+  whichever channel owns the surviving value, and carried with the value through
+  a historical import. That last part is the one with teeth — a leaf name that
+  outlived the value it described would blame a portal field for a reading that
+  came from somewhere else, which is worse than recording nothing, so a test
+  measures a merge where one field keeps its leaf and another loses it in the
+  same pass. The fuel level, having now been disputed by two reporters, was also
+  added to the handful of fields that record their provenance at all
+  ([#465](https://github.com/its-me-prash/vwgroup-connect-ha/issues/465)).
+- **A refused command now explains itself in the log, not only in the Home
+  Assistant dialog.** @Joassens tested the MBB client-identity refusal on a
+  Passat GTE and confirmed the message reads correctly in the UI — the car's
+  gateway accepted the S-PIN and then refused this integration's client
+  identity, none of it the owner's fault. Then he looked at the log file for the
+  same event and found one line: `command_start_climate(***074295) failed:
+  VehicleCommandError (status=None)`. The whole explanation lived only in the
+  error the UI surfaced, so anyone working from a log — which, when a command
+  fails, is usually the person who was asked to send one — got a class name and
+  a null status.
+
+  The reason a command error carries is now part of that error line. It applies
+  to `VehicleCommandError` alone, because every reason that class carries is
+  prose written for the owner and already shown to them; for every other
+  exception the line still logs the class and HTTP status only. That restriction
+  was already there and stays, but its stated justification was out of date: it
+  said a raw exception string can carry the VIN-bearing command URL, and
+  `APIError` has masked the VIN out of its own message since the #1355 redaction
+  work. What the restriction actually protects against is the arbitrary
+  exceptions that land in the same handler — a network or ADB library error
+  whose text nobody here has vetted. Both halves of that are now pinned by
+  tests, including one that fails if `APIError` ever stops redacting, so the
+  comment above the log line cannot quietly become wrong again
+  ([#584](https://github.com/its-me-prash/vwgroup-connect-ha/issues/584)).
+- **A Companion screen that could not be read is no longer reported as a screen
+  with nothing on it, and one failed read no longer costs half an hour of
+  them.** Two defects of the same shape, found by reading the three Companion
+  transports against each other.
+
+  The direct-ADB transport has refused a screen dump with no node tree in it
+  since v2.26.0, because a failed `uiautomator` run leaves its output file
+  untouched and the previous screen would otherwise be parsed as the live one.
+  The phone-agent relay overrode that method and returned whatever the agent
+  sent, so an agent that walked the accessibility tree and found no window —
+  display off, a secure screen, the car app not in front — reported success with
+  nothing in it. Zero nodes is what the read path treats as a car that had
+  nothing to say: the overview anchor check is skipped, the adaptive failure
+  backoff is reset, and the poll is recorded as healthy. The one outcome that
+  most needed to be visible was the only one that left no trace anywhere. The
+  relay now applies the same guard as its sibling.
+
+  And on the ADB side a single empty dump bought the full failure backoff — 30
+  minutes, doubling per consecutive failure to six hours — with no second
+  attempt. But `uiautomator dump` gives up when the screen does not go idle,
+  and an animation or a passing toast is enough to cause that; it is gone a
+  second later. The dump is now retried once, after a short settle, before it
+  becomes a failure, and the error says it tried twice. Three deliberate limits:
+  the retry re-runs the whole command rather than only re-reading the dump file,
+  so the stale-screen protection stays intact; a transport error is **not**
+  retried, because the connection has already been dropped for the next read to
+  rebuild and a second attempt could only report "not connected" over the real
+  reason; and the healthy path still costs exactly one round trip. On the relay
+  there is no retry, because another attempt there means another trip through
+  the agent's own poll and the usual cause of an empty tree does not change in
+  that time.
+- **The token refresh limit no longer announces a pause it never takes, and no
+  longer reports itself at error level once every poll.** The limit itself is
+  unchanged and correct: three refreshes per rolling hour, which is what keeps a
+  misbehaving entry from hammering the sign-in until the account is locked. What
+  was wrong was everything it said about itself. The message read *"pausing to
+  prevent IP ban; please reauthenticate from the UI"*, and nothing paused — the
+  call refuses one attempt and returns, so the next poll asks again and is
+  refused again. @georghaberkorn68-ctrl's CUPRA logged that sentence three times
+  per cycle, every three minutes, for hours across two days, which reads as a
+  runaway loop rather than as a limit doing its job. And the one instruction it
+  gave could not help him: his primary sign-in was being refused outright before
+  the portal fallback took over, so no credential he could type would change the
+  answer.
+
+  The refusal now says what it does — that it is refusing further refreshes, and
+  roughly when the next one is allowed, computed from the oldest attempt still
+  inside the window rather than from a constant. It is logged at error level
+  once per episode and at debug level while the budget stays spent, and the
+  "episode" resets as soon as an attempt is actually booked, so a genuinely new
+  storm weeks later is reported as news again. Where credentials are mentioned
+  at all, it is to say that re-entering them will not help when the sign-in
+  itself is what is being refused, and the errors that say *why* it is refused
+  sit directly above the line. The same guard exists a second time in the
+  Porsche client, which is not a subclass and had its own copy of both the
+  wording and the level; both are fixed, and a test fails if a third copy of the
+  old sentence ever ships
+  ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
+- **Volkswagen Companion (ADB) reads on VW app 4.8.1.** The parking position
+  read taps the button around the app's *Vehicle location* label (4.8.1 made
+  the label itself not clickable) and never the map. The Driving data
+  carousel is read whatever card it opens on; the first read sweeps both ends
+  and remembers which cards exist, again daily. Departure timers read their
+  weekdays from the list's recurrence label and Repeat from the new editor
+  (gszigethy/vwgroup-connect-ha#112, gszigethy/vwgroup-connect-ha#113).
 
 ### Sicherheit / Security
 

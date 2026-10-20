@@ -1,0 +1,11 @@
+{
+  "app_version": "4.8.1",
+  "captured": "2026-10-16",
+  "contributor": "gszigethy",
+  "vehicle": "Tiguan eHybrid",
+  "files": [
+    "long_first_481.xml",
+    "single_second_481.xml"
+  ],
+  "notes": "Read-only ADB captures. Dates redacted. Extra resource fixture contains only the two long-haul title translations extracted from the installed APK."
+}

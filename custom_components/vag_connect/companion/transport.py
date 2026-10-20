@@ -23,6 +23,16 @@ _LOGGER = logging.getLogger(__name__)
 
 # uiautomator writes the dump here, then we read it back over the same shell.
 _DUMP_PATH = "/sdcard/vag_connect_ui.xml"
+# The hidden-node helper (a11y/README.md): pushed for a departure timer edit on
+# VW app 4.8.1 and removed afterwards. The hash pins the shipped build.
+A11Y_DEX_SHA256 = "a43e3c09d05340fb862d019d14def5b03de4c24b5f8b1b4104006c9f8a5f992d"
+_A11Y_REMOTE = "/data/local/tmp/vag_connect_a11y.dex"
+_A11Y_RUN = f"CLASSPATH={_A11Y_REMOTE} app_process / A11yTree"
+
+# How long to wait before the single dump retry in ``dump_ui``. Long enough for
+# a transition or a toast to finish (uiautomator's own idle wait is ~1.5 s),
+# short enough that a failing read still fails inside one poll.
+_DUMP_RETRY_DELAY_S = 1.5
 
 # Where adb-shell persists the RSA keypair that authorises this HA instance to
 # the phone (the phone shows the "allow USB debugging" prompt once, then trusts
@@ -222,17 +232,39 @@ class NetworkAdbTransport:
         # dump into an honest no-data (empty cat, guard raises) instead.
         # One shell round trip for all three steps; the dump itself (~1.5 s,
         # uiautomator waits for the UI to go idle) is the cost that remains.
-        xml = await self.shell(
+        cmd = (
             f"rm -f {_DUMP_PATH}; uiautomator dump {_DUMP_PATH} >/dev/null; "
-            f"cat {_DUMP_PATH}",
-            timeout_s,
+            f"cat {_DUMP_PATH}"
         )
+        xml = await self.shell(cmd, timeout_s)
         if "<hierarchy" not in xml:
-            raise CompanionTransportError(
-                "uiautomator returned no screen dump; the phone may be asleep, "
-                "the app may not be in the foreground, or the screen may be "
-                "secured"
+            # ONE retry, then give up. The failure backoff above this is 30
+            # minutes doubling to six hours, and an empty dump used to buy it
+            # outright. But `uiautomator dump` gives up when the UI does not go
+            # idle, and an animation or a transient toast is enough — a
+            # condition that is gone a second later. Three seconds of retry
+            # against half an hour of blindness is not a close trade.
+            #
+            # The whole command is re-run, not just the `cat`: the `rm -f`
+            # above is what stops a failed dump returning the PREVIOUS run's
+            # XML, and a retry that skipped it would reintroduce exactly the
+            # stale-screen bug the rm was added for.
+            #
+            # A `shell` that RAISES is not retried. It has already dropped the
+            # device so the next read reconnects, and a second attempt here
+            # would only report "not connected" over the real reason.
+            _LOGGER.debug(
+                "companion: empty screen dump, retrying once in %.1fs",
+                _DUMP_RETRY_DELAY_S,
             )
+            await asyncio.sleep(_DUMP_RETRY_DELAY_S)
+            xml = await self.shell(cmd, timeout_s)
+            if "<hierarchy" not in xml:
+                raise CompanionTransportError(
+                    "uiautomator returned no screen dump twice; the phone may "
+                    "be asleep, the app may not be in the foreground, or the "
+                    "screen may be secured"
+                )
         return xml
 
     async def foreground_app(self, package: str, timeout_s: float = 10.0) -> None:
@@ -400,6 +432,68 @@ class NetworkAdbTransport:
             timeout_s,
         )
         await asyncio.sleep(0.6)
+
+    # -- hidden accessibility nodes (VW app 4.8.1 departure editor) -------------
+
+    can_read_hidden_nodes = True
+
+    async def a11y_prepare(self, timeout_s: float = 20.0) -> None:
+        """Push the hidden-node helper to the phone, checking its hash first."""
+        if self._device is None:
+            raise CompanionTransportError("not connected")
+        local = await asyncio.to_thread(_a11y_dex_path)
+        upload = asyncio.ensure_future(asyncio.to_thread(
+            functools.partial(
+                self._device.push, local, _A11Y_REMOTE,
+                transport_timeout_s=timeout_s, read_timeout_s=timeout_s,
+            )
+        ))
+        try:
+            await asyncio.shield(upload)
+        except asyncio.CancelledError:
+            # The upload thread cannot be stopped: let it finish, so the
+            # caller's cleanup removes the file instead of racing it.
+            try:
+                await upload
+            except Exception:  # noqa: BLE001 - only the cancellation matters here
+                pass
+            raise
+        except Exception as err:  # noqa: BLE001 - adb-shell raises many types
+            await self.close()
+            raise CompanionTransportError(
+                f"could not copy the editor helper to the phone ({type(err).__name__})"
+            ) from err
+
+    async def a11y_tree(self, timeout_s: float = 20.0) -> str:
+        """The foreground window's nodes, hidden ones included (A11yTree format)."""
+        out = await self.shell(_A11Y_RUN, timeout_s)
+        if "\nEND" not in f"\n{out}":
+            raise CompanionTransportError("the editor helper returned no screen")
+        return out
+
+    async def a11y_set_progress(self, index: int, value: float, timeout_s: float = 20.0) -> bool:
+        """Run SET_PROGRESS on the ``index``-th range node; True if accepted."""
+        out = await self.shell(f"{_A11Y_RUN} set {int(index)} {float(value):.1f}", timeout_s)
+        return f"SET {int(index)} true" in out
+
+    async def a11y_cleanup(self, timeout_s: float = 10.0) -> None:
+        """Remove the helper again. Raises on a dropped link, so the caller can reconnect."""
+        await self.shell(f"rm -f {_A11Y_REMOTE}", timeout_s)
+
+
+def _a11y_dex_path() -> str:
+    """The shipped helper, refused if it is not the reviewed build."""
+    import hashlib  # noqa: PLC0415
+    from pathlib import Path  # noqa: PLC0415
+
+    path = Path(__file__).parent / "a11y" / "a11y_tree.dex"
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as err:
+        raise CompanionTransportError("the editor helper is missing from the install") from err
+    if digest != A11Y_DEX_SHA256:
+        raise CompanionTransportError("the editor helper does not match the reviewed build")
+    return str(path)
 
 
 def _decode_app_strings(encoded: str) -> dict[str, set[str]]:

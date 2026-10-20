@@ -587,6 +587,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Poslední Jízda — Prům. Spotřeba Elektřiny"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Poslední Dlouhá Jízda — Vzdálenost"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Poslední Dlouhá Jízda — Doba jízdy"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Poslední Dlouhá Jízda — Prům. Rychlost"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Poslední Dlouhá Jízda — Prům. Spotřeba Paliva"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Poslední Dlouhá Jízda — Prům. Spotřeba Elektřiny"
+      },
       "software_version": {
         "name": "Verze Softwaru"
       },

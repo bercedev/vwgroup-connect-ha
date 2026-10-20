@@ -100,12 +100,13 @@ async def _gate(version: str, action: str) -> str:
     return str(err.value)
 
 
-def test_battery_actions_and_climate_are_pinned_to_4_6_4_and_4_3_2() -> None:
+def test_battery_actions_and_climate_are_pinned_to_the_verified_builds() -> None:
     specs = {a.action: a for a in PRESETS["volkswagen"].actions}
     for action in _PINNED:
-        assert specs[action].app_versions == ("4.6.4", "4.3.2"), action
-    assert CHARGE_TARGET_APP_VERSIONS == ("4.6.4", "4.3.2")
-    assert CLIMATE_APP_VERSIONS == ("4.6.4", "4.3.2")
+        # 4.8.1 verified live on 2026-10-17, command by command.
+        assert specs[action].app_versions == ("4.8.1", "4.6.4", "4.3.2"), action
+    assert CHARGE_TARGET_APP_VERSIONS == ("4.8.1", "4.6.4", "4.3.2")
+    assert CLIMATE_APP_VERSIONS == ("4.8.1", "4.6.4", "4.3.2")
 
 
 @pytest.mark.asyncio

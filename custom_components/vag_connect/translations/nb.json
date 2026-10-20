@@ -593,6 +593,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Siste tur, gjennomsnittlig strømforbruk"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Siste langtur, distanse"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Siste langtur, kjøretid"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Siste langtur, gjennomsnittsfart"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Siste langtur, gjennomsnittlig drivstofforbruk"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Siste langtur, gjennomsnittlig strømforbruk"
+      },
       "software_version": {
         "name": "Programvareversjon"
       },

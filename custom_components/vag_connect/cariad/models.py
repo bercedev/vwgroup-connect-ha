@@ -1509,6 +1509,12 @@ class VehicleData:
     departure_timer_2_time: str | None = None
     departure_timer_3_enabled: bool = False
     departure_timer_3_time: str | None = None
+    # Companion only — the VW app's "Last long-haul trip" card, never a cloud field.
+    companion_long_trip_distance_km: float | None = None
+    companion_long_trip_duration_min: int | None = None
+    companion_long_trip_avg_speed_kmh: float | None = None
+    companion_long_trip_avg_fuel_consumption_l_100km: float | None = None
+    companion_long_trip_avg_electric_consumption_kwh_100km: float | None = None
     # Companion only — charging locations in the VW app, never cloud profiles.
     charging_location_count: int | None = None
     charging_location_current: str | None = None
@@ -1991,6 +1997,20 @@ class VehicleData:
     # 78 vs 92") so a reading's uncertainty is visible per entity. Empty on the
     # vast majority of polls. Same skip/carry handling as field_captured_ts.
     ambiguous_fields: dict[str, str] = field(default_factory=dict)
+    # #465 (@Joassens) — the NAME of the EU-DA source leaf the mapper resolved
+    # onto each attribute. ``field_sources`` says which CHANNEL a value came
+    # from and ``field_captured_ts`` says when the car measured it; neither
+    # says which of the candidate leaf names actually won, and the mapper reads
+    # most fields from a list of aliases, first present wins. So a value that
+    # is plainly wrong could not be traced to the field that produced it: he
+    # reported a PHEV's fuel level pinned at exactly 100 % across 467 km and
+    # ended with "I can't tell which from diagnostics, since they don't include
+    # the raw portal field". Nor could elimination settle it — ``first()``
+    # marks EVERY candidate of a call used, plus their walker synonyms, so all
+    # of them vanish from ``raw_unmapped_fields`` together. ``_record`` is
+    # handed the chosen leaf already and was throwing the name away. Same
+    # skip/carry handling as field_captured_ts.
+    field_source_leaf: dict[str, str] = field(default_factory=dict)
 
     # ── v2.15.1 — EU Data Act + BFF wire-key mapping (2.15.0 plan) ──────────
     # New fields declared once on the shared model; each is written by the EU

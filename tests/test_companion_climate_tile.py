@@ -580,7 +580,7 @@ async def test_used_up_request_budget_pauses_commands_with_a_clear_reason():
 async def test_other_app_versions_are_never_tapped():
     phone = FakePhone(version="4.2.1")
     _ch, ctrl = _controller(phone)
-    with pytest.raises(CompanionWriteBlocked, match="4.3.2"):
+    with pytest.raises(CompanionWriteBlocked, match="version 4.2.1"):
         await ctrl.start()
     assert phone.taps == []
 

@@ -587,6 +587,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Último Viaje — Consumo Medio Eléctrico"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Último Viaje Largo — Distancia"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Último Viaje Largo — Duración"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Último Viaje Largo — Velocidad Media"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Último Viaje Largo — Consumo Medio Combustible"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Último Viaje Largo — Consumo Medio Eléctrico"
+      },
       "software_version": {
         "name": "Versión de Software"
       },

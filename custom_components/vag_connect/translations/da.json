@@ -593,6 +593,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Seneste tur — gennemsnitligt strømforbrug"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Seneste langtur — distance"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Seneste langtur — køretid"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Seneste langtur — gennemsnitshastighed"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Seneste langtur — gennemsnitligt brændstofforbrug"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Seneste langtur — gennemsnitligt strømforbrug"
+      },
       "software_version": {
         "name": "Softwareversion"
       },
