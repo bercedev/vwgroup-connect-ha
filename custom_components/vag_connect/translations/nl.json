@@ -192,6 +192,7 @@
       "email_two_factor_required": "E-mail 2FA vereist. Controleer je inbox (en spam) op een 6-cijferige code, log dan handmatig in via de app.",
       "too_many_requests": "Account tijdelijk geblokkeerd. Wacht 15 minuten.",
       "invalid_credentials": "E-mailadres of wachtwoord onjuist.",
+      "invalid_otp": "Die e-mailcode is niet geaccepteerd. Aan je wachtwoord ligt het niet — dat is al gecontroleerd, daarom kreeg je een code. Vraag een nieuwe code aan en probeer het opnieuw; blijft het misgaan, log dan één keer op volkswagen.de in een browser in en voeg het kanaal daarna opnieuw toe.",
       "website_login_failed": "Je e-mailadres en wachtwoord zijn niet het probleem — de aanmelding bij volkswagen.de kwam daar voorbij en liep pas in een latere stap vast (bijvoorbeeld een verlopen sessie, een omleidingslus of een pagina die niet werd herkend). De reden staat in het Home Assistant-logboek. Een ander wachtwoord helpt niet; als het blijft gebeuren, open dan een issue met die logregel.",
       "portal_interaction_required": "Het EU Data Act-portaal vereist een eenmalige actie in je browser of merk-app (bijv. voorwaarden accepteren, toestemming bevestigen, onboarding/regiokeuze voltooien) voordat headless-toegang werkt. Dit is GEEN wachtwoordprobleem — open het portaal één keer in een browser, voltooi de melding en probeer het opnieuw.",
       "upstream_unavailable": "VW backend tijdelijk onbereikbaar. Dit is een serverprobleem bij VW, GEEN inlogfout. Wacht 5–15 minuten en probeer opnieuw. Configureer de integratie NIET opnieuw.",
