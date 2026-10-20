@@ -2906,7 +2906,24 @@ class VagConnectCoordinator(DataUpdateCoordinator):
             ok = await scraper.kickoff_historical_export(vin)
         except DataActSessionExpiredError:
             self._raise_data_act_session_expired_repair()
-            return False
+            # The card alone is not enough here: this is a button press, and a
+            # method that returns quietly draws a success tick. Same reason the
+            # import beside it was changed for @placidcasual98 — the two halves
+            # of the same feature should not disagree about whether a failure
+            # is worth telling the user about.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="portal_session_expired",
+            ) from None
+        # NOTE: a plain False is returned for a refusal rather than raised.
+        # This method is also reached while Home Assistant is tearing the entry
+        # down, where the session closes under the request and there is nobody
+        # to tell — ``test_export_unload_returns_false_without_reauth_or_pending``
+        # pins that, and an unload cannot be told apart from a refusal here
+        # without the scraper reporting which it was. The BUTTON turns a False
+        # into a visible error instead, because a button press always has
+        # someone in front of it. (The session-expired branch above does raise:
+        # it is unreachable during an unload, which the same test asserts.)
         if ok:
             # The portal gives this request no terminal state (it can silently
             # vanish ~24-36h later), so start our own client-side deadline clock.
@@ -3277,15 +3294,35 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 type(exc).__name__,
             )
 
-    async def async_create_data_act_request(self) -> None:
+    async def async_create_data_act_request(self, vin: str | None = None) -> None:
         """User-triggered (button): (re)create/refresh the EU-Data-Act
         continuous data request now. Runs even when automatic provisioning
-        is turned off — pressing the button is explicit intent (``force``)."""
+        is turned off — pressing the button is explicit intent (``force``).
+
+        Raises when the portal refused, because a button that returns quietly
+        draws a success tick in Home Assistant whatever happened. @Dulcow
+        pressed this one, watched nothing happen, and worked out only from the
+        portal itself that his request had never been created. The kickoff
+        already records the portal's status for diagnostics — it just had no
+        way to reach the person standing in front of the button.
+        """
         import time  # noqa: PLC0415
         # Rate-limit the runtime auto-path after a manual press (a request
         # now exists), but the create itself always runs via force=True.
         self._last_runtime_kickoff = time.monotonic()
+        if vin is not None:
+            # Clear any status left by an earlier press, so what we read back
+            # below is this attempt's verdict and not a stale one.
+            self._data_act_kickoff_error.pop(vin, None)
         await self._ensure_data_act_custom_request_kickoff(force=True)
+        if vin is not None:
+            reason = self._data_act_kickoff_error.get(vin)
+            if reason:
+                raise ServiceValidationError(
+                    translation_domain=DOMAIN,
+                    translation_key="data_act_request_refused",
+                    translation_placeholders={"reason": str(reason)},
+                )
         await self.async_request_refresh()
 
     def _raise_data_act_session_expired_repair(self) -> None:

@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Mitään ei tuotu: EU Data Act -portaalissa ei ole juuri nyt kertaluonteista historiavientiä tälle ajoneuvolle ({reason}). Jos syynä on no_request, vientiä ei ole vielä pyydetty portaalissa tai pyytämäsi on sittemmin vanhentunut. Jos syynä on empty tai no_content, portaali hyväksyi pyynnön mutta ei ole vielä luonut tiedostoa, mihin voi mennä useita tunteja."
     },
+    "data_act_request_refused": {
+      "message": "EU Data Act -portaali kieltäytyi luomasta datapyyntöä ({reason}). Mitään ei luotu. Tarkista portaalista, että ajoneuvon omistus tai käyttö on vahvistettu ja datan jakaminen sallittu; jos autolle on jo aktiivinen pyyntö, portaali sallii vain yhden."
+    },
+    "historical_export_refused": {
+      "message": "EU Data Act -portaali ei hyväksynyt kertaluonteista historiavientipyyntöä, joten mitään ei pyydetty. Yleensä portaali hylkää toisen pyynnön, kun ajoneuvolla on jo yksi kesken — tarkista portaali ja yritä sitten uudelleen."
+    },
+    "portal_session_expired": {
+      "message": "EU Data Act -portaali hylkäsi istunnon, joten mitään ei pyydetty. Kirjaudu uudelleen: Asetukset → Laitteet ja palvelut → VW Group Connect → kolmen pisteen valikko → Määritä uudelleen."
+    },
     "historical_disabled": {
       "message": "Kertaluonteinen historiatietojen vienti on tällä hetkellä poistettu käytöstä."
     },

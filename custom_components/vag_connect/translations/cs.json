@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Nic se neimportovalo: portál EU Data Act nyní nemá pro toto vozidlo žádný jednorázový historický export ({reason}). Pokud je uvedeno no_request, export zatím nebyl v portálu vyžádán, nebo ten vyžádaný už vypršel. Pokud je uvedeno empty nebo no_content, portál požadavek přijal, ale soubor zatím nevytvořil – to může trvat několik hodin."
     },
+    "data_act_request_refused": {
+      "message": "Portál EU Data Act odmítl vytvořit datový požadavek ({reason}). Nic nebylo vytvořeno. Zkontrolujte v portálu, že je u tohoto vozidla potvrzeno vlastnictví nebo užívání a udělen souhlas se sdílením dat; pokud pro vůz již existuje aktivní požadavek, portál povoluje jen jeden."
+    },
+    "historical_export_refused": {
+      "message": "Portál EU Data Act nepřijal požadavek na jednorázový historický export, nic tedy nebylo vyžádáno. Portál obvykle odmítá druhý požadavek, dokud je u vozidla jeden nevyřízený – zkontrolujte portál a zkuste to znovu."
+    },
+    "portal_session_expired": {
+      "message": "Portál EU Data Act odmítl relaci, nic tedy nebylo vyžádáno. Přihlaste se znovu: Nastavení → Zařízení a služby → VW Group Connect → nabídka se třemi tečkami → Překonfigurovat."
+    },
     "historical_disabled": {
       "message": "Jednorázový historický export je momentálně vypnutý."
     },

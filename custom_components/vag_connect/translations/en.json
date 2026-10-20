@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Nothing was imported: the EU Data Act portal has no one-time historical export for this vehicle right now ({reason}). If this says no_request, the export has not been requested in the portal yet, or the one you requested has since expired. If it says empty or no_content, the portal accepted the request but has not produced the file yet, which can take several hours."
     },
+    "data_act_request_refused": {
+      "message": "The EU Data Act portal refused to create the data request ({reason}). Nothing was created. Open the portal and check that ownership or usership is confirmed for this vehicle and that the data-sharing consent has been granted; if there is already an active request for this car, the portal allows only one."
+    },
+    "historical_export_refused": {
+      "message": "The EU Data Act portal did not accept the one-time historical export request, so nothing was requested. This is usually the portal refusing a second request while one is still pending for this vehicle — check the portal, and try again once it is gone."
+    },
+    "portal_session_expired": {
+      "message": "The EU Data Act portal rejected the session, so nothing was requested. Sign in again: Settings → Devices & services → VW Group Connect → 3-dot menu → Reconfigure."
+    },
     "historical_disabled": {
       "message": "The one-time historical export is currently disabled."
     },

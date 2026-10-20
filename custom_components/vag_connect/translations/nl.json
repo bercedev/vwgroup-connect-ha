@@ -2930,6 +2930,15 @@
     "historical_export_empty": {
       "message": "Er is niets geïmporteerd: het EU Data Act-portaal heeft op dit moment geen eenmalige historische export voor dit voertuig ({reason}). Staat er no_request, dan is de export nog niet in het portaal aangevraagd of is de aangevraagde inmiddels verlopen. Staat er empty of no_content, dan heeft het portaal de aanvraag aanvaard maar het bestand nog niet aangemaakt; dat kan enkele uren duren."
     },
+    "data_act_request_refused": {
+      "message": "Het EU Data Act-portaal heeft het aanmaken van de gegevensaanvraag geweigerd ({reason}). Er is niets aangemaakt. Controleer in het portaal of eigendom of gebruik voor dit voertuig is bevestigd en of de gegevensdeling is toegestaan; als er al een actieve aanvraag voor deze auto is, staat het portaal er maar één toe."
+    },
+    "historical_export_refused": {
+      "message": "Het EU Data Act-portaal heeft de eenmalige historische export niet geaccepteerd, er is dus niets aangevraagd. Meestal weigert het portaal een tweede aanvraag zolang er voor dit voertuig nog één openstaat — kijk in het portaal en probeer het daarna opnieuw."
+    },
+    "portal_session_expired": {
+      "message": "Het EU Data Act-portaal heeft de sessie geweigerd, er is dus niets aangevraagd. Meld je opnieuw aan: Instellingen → Apparaten & diensten → VW Group Connect → menu met drie puntjes → Opnieuw configureren."
+    },
     "historical_disabled": {
       "message": "De eenmalige historische export is momenteel uitgeschakeld."
     },

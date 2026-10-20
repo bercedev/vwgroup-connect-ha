@@ -6,8 +6,10 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .const import DOMAIN
 from .coordinator import VagConnectCoordinator
 from .entity_base import VagConnectEntity, register_dynamic_spawner
 
@@ -175,7 +177,10 @@ class VagDataActRequestButton(VagConnectEntity, ButtonEntity):
         super().__init__(coordinator, vin, "data_act_request_button")
 
     async def async_press(self) -> None:
-        await self.coordinator.async_create_data_act_request()
+        # Pass the VIN so a refusal can be reported for THIS car. Without it
+        # the coordinator has no way to tell which vehicle's verdict to read
+        # back, and the press ends quietly whatever the portal answered.
+        await self.coordinator.async_create_data_act_request(self._vin)
 
 
 class VagHistoricalExportButton(VagConnectEntity, ButtonEntity):
@@ -196,7 +201,18 @@ class VagHistoricalExportButton(VagConnectEntity, ButtonEntity):
         super().__init__(coordinator, vin, "historical_export_button")
 
     async def async_press(self) -> None:
-        await self.coordinator.async_request_historical_export(self._vin)
+        # A quiet False ends the press normally, and Home Assistant draws a
+        # success tick over a request the portal never accepted — the same
+        # shape @placidcasual98 hit on the IMPORT half of this feature. The
+        # raise lives here rather than in the coordinator because that method
+        # is also reached while the entry is being unloaded, where a False is
+        # not a refusal and there is nobody to tell. A button press always has
+        # someone in front of it.
+        if not await self.coordinator.async_request_historical_export(self._vin):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="historical_export_refused",
+            )
 
 
 class VagCompanionResetButton(VagConnectEntity, ButtonEntity):

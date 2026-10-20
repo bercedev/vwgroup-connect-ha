@@ -580,6 +580,32 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   explanation. Unscoped triggers and conditions are untouched and still apply
   to every vehicle, which is their documented behaviour.
 
+- **Two portal buttons no longer show a success tick over a refusal.**
+  @Dulcow pressed "Create EU Data Act data request", watched his activity list,
+  and saw the press recorded and then nothing at all — no success, no failure.
+  He found out only by opening the portal himself that no request had been
+  created. The integration had the portal's answer the whole time: it records
+  the status for diagnostics, and had no way to reach the person standing in
+  front of the button.
+
+  Its sibling had the same shape. The one-time historical export returned
+  quietly both when the portal refused the request and when the session had
+  expired, so that button reported success too — while the *import* half of the
+  same feature was changed for exactly this a few hours earlier. Two halves of
+  one feature should not disagree about whether a failure is worth mentioning.
+
+  Both now say what happened, with the portal's own reason where there is one,
+  in all twelve languages. The create button passes its vehicle so the answer
+  is about *that* car, and clears any verdict left by an earlier press so the
+  message belongs to the press you just made. Two things deliberately did not
+  change: a successful press is still silent, and a refused one still leaves
+  nothing behind — in particular a refused export does not start the
+  client-side "pending" clock, which would have shown an export that does not
+  exist. The export's error is raised by the button rather than deeper down,
+  because the same code also runs while Home Assistant is shutting the entry
+  down, where a failure is neither a refusal nor something anyone is waiting
+  to be told about.
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
