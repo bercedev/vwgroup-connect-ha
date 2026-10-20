@@ -46,6 +46,27 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Geändert / Changed
+
+- **Removed a constructor argument that looked like multi-brand support and
+  did nothing.** While answering @bzykcar's question in
+  [#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805) —
+  whether any sign-in path is left that would reach the manufacturer channel
+  for an Audi — the volkswagen.de connector turned out to accept a `brand`
+  argument, and the runtime passed each entry's *real* brand into it. The value
+  was stored on the instance and never read again, by anything. The connector
+  is volkswagen.de in every path it has, so an Audi routed through it would
+  have signed in to the Volkswagen site successfully, and anyone treating the
+  argument as an Audi lever would have watched that work and believed it.
+
+  A missing parameter is a question you have to answer; a dead one is an answer
+  you can believe. Both it and a second never-read copy of the session object
+  beside it are gone. Supporting another brand here needs a real
+  implementation, and it will come back with one.
+
+  No behaviour changes for any existing entry: every call site already received
+  the Volkswagen site regardless of what it passed.
+
 ### Behoben / Fixed
 
 - **The "vehicle data hasn't refreshed" warning now says which car, and stops
@@ -103,6 +124,32 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   settings-screen labels ("Charging up to (50-100%)", "Reduced AC charging
   current") stop reading as charging. His dump is committed as a fixture, with
   his attribution.
+- **The test-cohort share prompt no longer goes to entries that cannot produce
+  a capture, and a probe that fails now says so.** @bzykcar
+  ([#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805))
+  enabled the opt-in cohort on a portal-only Audi, to help, and reported that
+  `probe_outcomes` stayed empty. He was right, and two faults made it read that
+  way.
+
+  The prompt was gated on `hasattr(client, "command_captures")` — an attribute
+  created unconditionally in the base client's `__init__`, so it was true for
+  every brand and every auth strategy. The gate tested that a Python attribute
+  existed, not that a channel was reachable. The capture it asks for is written
+  inside the command confirm-poll, so an entry with no command path can never
+  produce one; he was asked to share something that could not exist. It now
+  consults `is_structural_read_only()`, this project's own answer to whether an
+  entry can send a command. A working Audi with no volkswagen.de channel still
+  gets the prompt, which is what that gate was added for, and SEAT/CUPRA keep
+  theirs through the locale-capture flag.
+
+  Separately, the three opt-in probes (position, state of health, range
+  measurements) caught every exception, wrote one debug line and recorded
+  nothing — so a probe that ran and was refused left `probe_outcomes` exactly as
+  empty as one that never attempted anything. Each now records
+  `error:<ExceptionType>` under its own key, the exception type only and never
+  the message, which can carry a host or a path. The core read twenty lines
+  below them already did this, which made their silence an inconsistency rather
+  than a design choice.
 - **The e-mail code step no longer tells you your password is wrong.**
   @kalwados added the volkswagen.de read channel, received the code by e-mail,
   typed it, and was told *"Login failed; your username or password are wrong"* —
