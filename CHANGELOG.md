@@ -499,6 +499,37 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   weekdays from the list's recurrence label and Repeat from the new editor
   (gszigethy/vwgroup-connect-ha#112, gszigethy/vwgroup-connect-ha#113).
 
+- **Importing a historical export that no longer exists now says so, instead of
+  showing a green tick.** @placidcasual98 confirmed that after v5.0.0 the
+  import works — battery level, electric range, charging schedule and the three
+  departure timers all arrived on his car and stayed — but he got there the slow
+  way. His first attempt ran against an export that had expired off the portal,
+  and `vag_connect.import_historical_export` returned quietly, which ends the
+  service call normally and makes Home Assistant draw a success tick. Nothing
+  had been imported. He only worked out why by opening the portal himself, and
+  said what would have saved him the time: *"A message saying no file was found
+  would have saved me some time."*
+
+  The service already logged which of the failure modes it was; what it did not
+  do was fail. It now raises, exactly as the neighbouring branch already does
+  when the portal is not ready at all, and the message carries the portal's own
+  reason — `no_request` means the one-time export was never requested or has
+  since expired, `empty` or `no_content` means the portal took the request but
+  has not produced the file yet. In all twelve languages. A failed import still
+  writes nothing, pushes nothing and leaves the snapshot untouched, which is the
+  half of the old behaviour that was always right
+  ([#1403](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1403)).
+
+- **A Companion cancellation test no longer fails at random.**
+  `test_cancelling_during_the_upload_lets_it_finish_before_cleanup` waited a
+  fixed 0.05 s and then assumed the helper upload was in flight. In a full-suite
+  run on a loaded thread pool it sometimes is not: the work item is still queued,
+  cancelling drops it before it ever starts, and the test then fails for the one
+  reason that is not a defect — there was no upload to let finish, and so no
+  cleanup race either. It now waits for the upload thread to actually start
+  before cancelling, which is what the test's own name claims it does. No
+  production code changed; the behaviour it guards is unaltered.
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a

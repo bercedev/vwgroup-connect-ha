@@ -82,12 +82,43 @@ async def test_drivetrain_flag_not_flipped() -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_data_returns_false_and_pushes_nothing() -> None:
+async def test_no_data_raises_and_pushes_nothing() -> None:
+    """@placidcasual98 (#1403) — this used to return False, which ends the
+    service call normally and makes Home Assistant draw a green tick. His old
+    export had expired off the portal; he got that tick with nothing imported
+    and only found out why by opening the portal himself.
+
+    It now raises, like the portal-not-ready branch beside it. The second
+    assertion is the one that must not change: a failed import still writes
+    nothing and pushes nothing.
+    """
+    from homeassistant.exceptions import ServiceValidationError
+
     hist = VehicleData(vin="V")
     hist.no_data = True  # ZIP not ready yet
     c = _coord(hist, {"soc": 80})
-    assert await c.async_import_historical_export("V") is False
+    with pytest.raises(ServiceValidationError) as err:
+        await c.async_import_historical_export("V")
+    assert err.value.translation_key == "historical_export_empty"
     assert c.pushed == []
+    assert c.vehicles["V"] == {"soc": 80}, "a failed import must not alter the snapshot"
+
+
+@pytest.mark.asyncio
+async def test_the_raised_error_carries_the_reason_it_was_given() -> None:
+    """The discriminator the connector recorded is what tells no_request
+    (nothing requested, or it expired) apart from empty/no_content (requested,
+    not produced yet). It was already in the log; it has to reach the dialog
+    too, or the message cannot say which of the two the user is in."""
+    from homeassistant.exceptions import ServiceValidationError
+
+    hist = VehicleData(vin="V")
+    hist.no_data = True
+    c = _coord(hist, {"soc": 80})
+    c._cariad_client._eu_portal.last_no_data_reason = "no_request"
+    with pytest.raises(ServiceValidationError) as err:
+        await c.async_import_historical_export("V")
+    assert (err.value.translation_placeholders or {}).get("reason") == "no_request"
 
 
 @pytest.mark.asyncio

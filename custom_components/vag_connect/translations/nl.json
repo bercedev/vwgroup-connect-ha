@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "Het EU Data Act-portaal is nog niet gereed. Wacht tot de integratie na de installatie één keer heeft opgehaald en probeer de historische export dan opnieuw."
     },
+    "historical_export_empty": {
+      "message": "Er is niets geïmporteerd: het EU Data Act-portaal heeft op dit moment geen eenmalige historische export voor dit voertuig ({reason}). Staat er no_request, dan is de export nog niet in het portaal aangevraagd of is de aangevraagde inmiddels verlopen. Staat er empty of no_content, dan heeft het portaal de aanvraag aanvaard maar het bestand nog niet aangemaakt; dat kan enkele uren duren."
+    },
     "historical_disabled": {
       "message": "De eenmalige historische export is momenteel uitgeschakeld."
     },

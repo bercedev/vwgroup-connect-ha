@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "EU Data Act-portalen er ikke klar ennå. Vent til integrasjonen har hentet data én gang etter oppsett, og prøv deretter det historiske eksporten på nytt."
     },
+    "historical_export_empty": {
+      "message": "Ingenting ble importert: EU Data Act-portalen har akkurat nå ingen engangseksport av historikk for dette kjøretøyet ({reason}). Står det no_request, er eksporten ennå ikke bestilt i portalen, eller den du bestilte har gått ut. Står det empty eller no_content, har portalen godtatt bestillingen, men ikke laget filen ennå, og det kan ta flere timer."
+    },
     "historical_disabled": {
       "message": "Engangs historisk eksport er for øyeblikket deaktivert."
     },

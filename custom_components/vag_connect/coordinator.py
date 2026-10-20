@@ -2939,7 +2939,24 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 "but has not produced the file yet, which can take a while.",
                 mask_vin(vin), reason,
             )
-            return False
+            # @placidcasual98 (#1403) — the log line above was added so this
+            # service would stop being silent, and it still left the one place
+            # the user is actually looking saying the opposite: returning False
+            # ends the service call normally, so Home Assistant draws a green
+            # tick. His old export had expired off the portal, he got that tick
+            # with nothing imported, and only found out why by opening the
+            # portal himself. "A message saying no file was found would have
+            # saved me some time."
+            #
+            # Raising is what the branch twenty lines up already does for the
+            # portal-not-ready case, and this is the same kind of outcome: a
+            # user-triggered action that could not do the thing it was asked to
+            # do. The log keeps the detail; the UI now at least says it failed.
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="historical_export_empty",
+                translation_placeholders={"reason": reason},
+            )
         hist = historical.to_dict()
         merged_any = False
         with self._vehicles_lock:

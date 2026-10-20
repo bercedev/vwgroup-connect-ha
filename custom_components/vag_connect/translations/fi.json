@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "EU:n datasäädösportaali ei ole vielä valmis. Odota, kunnes integraatio on hakenut tiedot kerran käyttöönoton jälkeen, ja yritä sitten uudelleen."
     },
+    "historical_export_empty": {
+      "message": "Mitään ei tuotu: EU Data Act -portaalissa ei ole juuri nyt kertaluonteista historiavientiä tälle ajoneuvolle ({reason}). Jos syynä on no_request, vientiä ei ole vielä pyydetty portaalissa tai pyytämäsi on sittemmin vanhentunut. Jos syynä on empty tai no_content, portaali hyväksyi pyynnön mutta ei ole vielä luonut tiedostoa, mihin voi mennä useita tunteja."
+    },
     "historical_disabled": {
       "message": "Kertaluonteinen historiatietojen vienti on tällä hetkellä poistettu käytöstä."
     },

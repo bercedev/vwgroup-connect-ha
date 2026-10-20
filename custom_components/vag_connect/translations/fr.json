@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "Le portail EU Data Act n'est pas encore prêt. Attendez que l'intégration ait interrogé une fois après la configuration, puis réessayez l'export historique."
     },
+    "historical_export_empty": {
+      "message": "Rien n'a été importé : le portail EU Data Act n'a actuellement aucun export historique ponctuel pour ce véhicule ({reason}). Si la raison est no_request, l'export n'a pas encore été demandé dans le portail, ou celui demandé a expiré depuis. Si elle est empty ou no_content, le portail a accepté la demande mais n'a pas encore produit le fichier, ce qui peut prendre plusieurs heures."
+    },
     "historical_disabled": {
       "message": "L'export historique ponctuel est actuellement désactivé."
     },
