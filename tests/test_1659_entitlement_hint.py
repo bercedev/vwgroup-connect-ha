@@ -94,5 +94,5 @@ def test_the_latch_starts_empty_on_a_fresh_connector():
         WebsiteAuthProxyConnector,
     )
 
-    c = WebsiteAuthProxyConnector(MagicMock(), "a@b.c", "pw", brand="volkswagen")
+    c = WebsiteAuthProxyConnector(MagicMock(), "a@b.c", "pw")
     assert c._entitlement_logged == set()

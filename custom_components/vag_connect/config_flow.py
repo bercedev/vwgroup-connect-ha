@@ -97,7 +97,8 @@ def _brand_label(brand: str) -> str:
 #:
 #: This was a bare ``!= "volkswagen"`` and refused Commercial Vehicles for no
 #: measured reason: nothing downstream of the gate is brand-specific, the
-#: connector is constructed with ``brand="volkswagen"`` either way, and the two
+#: connector is volkswagen.de for every caller (it used to take a ``brand``
+#: argument that was never read — removed in #1805), and the two
 #: brands are already treated as one thing where it matters most — Commercial
 #: Vehicles uses the same We Connect app, and its EU Data Act configuration is
 #: the Volkswagen one with a different state name (#1316). The reporter's own
@@ -1220,7 +1221,7 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
             cookie_jar=aiohttp.CookieJar(unsafe=True),
         )
         self._wap_connector = WebsiteAuthProxyConnector(
-            self._wap_session, username, password, brand="volkswagen",
+            self._wap_session, username, password,
         )
         try:
             result = await self._wap_connector.begin_login()
