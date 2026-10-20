@@ -118,6 +118,27 @@ _SCOUT_REPAIR_SKIP_LEAVES: frozenset[str] = frozenset({
     "first_active_consumer_",
     "second_active_consumer_",
     "third_active_consumer_",
+    # #1831 (@Dirk-fs), #1838 and #1861 (@sssfamilientermine-wq) — the SAME
+    # field raised the repair three times, on volkswagen, on an ID.7 Tourer GTX
+    # and on a CUPRA Tavascan, and three people were asked to hand-file it.
+    #
+    # Grounded before suppressing anything: the catalogue has zero names
+    # containing "jobstatus", "job_status" or "job status" (control: "mileage"
+    # matches, so the search works), nothing in _eu_data_act.py maps or
+    # allowlists it, and lookup("eu_data_act.jobStatus") is None under both the
+    # shipped and the #1899 lookup. It is genuinely unmapped, not merely
+    # unrecognised by a broken lookup.
+    #
+    # REPAIR-skipped and deliberately NOT added to _ENVELOPE_NOISE_LEAVES,
+    # which would drop it from raw_unmapped_fields altogether. The samples are
+    # ``JOBSTATUS_FLASHING`` and ``JOBSTATUS_DONE``, and those read two ways: a
+    # portal export-job envelope status (plumbing, like auth_level) or a
+    # software-flash job actually running on the car (a real signal worth an
+    # entity). I cannot tell which from three samples, and the two readings
+    # call for opposite actions — so stop the nagging and keep the data
+    # visible, which leaves the question answerable instead of closing it by
+    # deletion. #1831 stays open as the mapping question.
+    "jobstatus",
 })
 # Substring match on the (masked) sample: #1100's UUID annotation rides in the
 # value as ``... (uuid c0bb1348)``; keying on the UUID (not the eu_data_act.open
@@ -129,7 +150,12 @@ _SCOUT_REPAIR_SKIP_UUIDS: frozenset[str] = frozenset({"c0bb1348", "d5dc7c87"})
 def _is_scout_repair_skipped(f: UnexpectedField) -> bool:
     """True if a finding is known/intentionally-unmapped and must not spawn the
     user-facing Scout repair. It stays in raw_unmapped_fields regardless."""
-    if f.path.rsplit(".", 1)[-1] in _SCOUT_REPAIR_SKIP_LEAVES:
+    # #1831 — matched case-insensitively. The portal spells this one
+    # ``jobStatus`` while every entry in the set above is lower case, so an
+    # exact match would have skipped nothing and the nagging would have carried
+    # on with a set that LOOKED like it covered the field. The envelope-noise
+    # check in _eu_data_act.py already lowercases its leaf; this one did not.
+    if f.path.rsplit(".", 1)[-1].lower() in _SCOUT_REPAIR_SKIP_LEAVES:
         return True
     sample = f.sample_masked or ""
     return any(u in sample for u in _SCOUT_REPAIR_SKIP_UUIDS)
@@ -435,13 +461,32 @@ def ensure_unexpected_keys_issue(
     Facebook/forum users can copy-paste without leaving HA.
     """
     # Drop the intentional-skip set from the REPAIR only (they stay in
-    # raw_unmapped_fields / diagnostics). If a poll's findings are *only* the
-    # skipped set, findings_list is empty and the empty-case below deletes the
-    # repair — no more per-user spam for scope_potential_total / c0bb1348.
-    findings_list = [f for f in findings if not _is_scout_repair_skipped(f)]
+    # raw_unmapped_fields / diagnostics) — no more per-user spam for
+    # scope_potential_total / c0bb1348 / jobStatus.
+    #
+    # Materialised, because the two cases below have to be told apart and
+    # ``findings`` may be a one-pass iterable.
+    all_findings = list(findings)
+    findings_list = [f for f in all_findings if not _is_scout_repair_skipped(f)]
     issue_id = f"{entry_id}_{ISSUE_ID_UNEXPECTED_KEYS}"
 
     if not findings_list:
+        # #1831 — these were one branch and they are not the same thing.
+        #
+        # Nothing found at all: the surface stabilised or the user cleared the
+        # buffer, the card is stale, delete it.
+        #
+        # Findings exist but every one is repair-skipped: the card must not
+        # appear, and it must not be DELETED either. HA's
+        # ``async_delete_issue`` pops the whole registry entry, and the
+        # dismissal lives on that entry as ``dismissed_version`` — so deleting
+        # throws away the user's "ignore", and the next poll that turns up one
+        # mappable field raises a fresh, un-ignored card. A field that keeps
+        # reappearing therefore kept re-nagging someone who had already said
+        # no. A refresh is safe (``async_get_or_create`` replaces the entry
+        # without touching ``dismissed_version``); only the delete is not.
+        if all_findings:
+            return
         ir.async_delete_issue(hass, DOMAIN, issue_id)
         return
 
