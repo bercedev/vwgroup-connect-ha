@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "Il portale EU Data Act non è ancora pronto. Attendi che l'integrazione abbia effettuato un'interrogazione dopo la configurazione, poi riprova l'esportazione storica."
     },
+    "historical_export_empty": {
+      "message": "Non è stato importato nulla: il portale EU Data Act al momento non ha un export storico una tantum per questo veicolo ({reason}). Se indica no_request, l'export non è ancora stato richiesto nel portale oppure quello richiesto è nel frattempo scaduto. Se indica empty o no_content, il portale ha accettato la richiesta ma non ha ancora prodotto il file, cosa che può richiedere diverse ore."
+    },
     "historical_disabled": {
       "message": "L'esportazione storica una tantum è attualmente disattivata."
     },

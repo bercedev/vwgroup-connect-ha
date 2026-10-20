@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "El portal de la Ley de Datos de la UE aún no está listo. Espera a que la integración haya consultado una vez tras la configuración e inténtalo de nuevo."
     },
+    "historical_export_empty": {
+      "message": "No se importó nada: el portal de la EU Data Act no tiene ahora mismo una exportación histórica puntual para este vehículo ({reason}). Si indica no_request, la exportación aún no se ha solicitado en el portal, o la que solicitaste ya ha caducado. Si indica empty o no_content, el portal aceptó la solicitud pero todavía no ha generado el archivo, lo que puede tardar varias horas."
+    },
     "historical_disabled": {
       "message": "La exportación histórica única está desactivada actualmente."
     },

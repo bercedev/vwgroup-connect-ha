@@ -2927,6 +2927,9 @@
     "historical_portal_not_ready": {
       "message": "Portal EU Data Act nie jest jeszcze gotowy. Poczekaj, aż integracja wykona jedno odpytanie po konfiguracji, a następnie ponów eksport historyczny."
     },
+    "historical_export_empty": {
+      "message": "Nic nie zaimportowano: portal EU Data Act nie ma obecnie jednorazowego eksportu historycznego dla tego pojazdu ({reason}). Jeśli widnieje no_request, eksport nie został jeszcze zamówiony w portalu albo zamówiony już wygasł. Jeśli widnieje empty lub no_content, portal przyjął zlecenie, ale nie utworzył jeszcze pliku, co może potrwać kilka godzin."
+    },
     "historical_disabled": {
       "message": "Jednorazowy eksport historyczny jest obecnie wyłączony."
     },

@@ -509,15 +509,31 @@ async def test_cancelling_during_the_upload_lets_it_finish_before_cleanup():
     import time as _time
 
     t = _adb()
+    started = threading.Event()
     finished = threading.Event()
 
     def slow_push(*_a, **_k):
+        started.set()
         _time.sleep(0.2)
         finished.set()
 
     t._device.push = slow_push
     task = asyncio.ensure_future(t.a11y_prepare())
-    await asyncio.sleep(0.05)
+
+    # Wait for the push to be IN FLIGHT rather than sleeping a fixed 0.05 s and
+    # hoping. The fixed sleep made this test fail intermittently in a full-suite
+    # run (seen 2026-10-20 on main, green in isolation three times over): under a
+    # loaded default thread-pool executor the work item can still be queued at
+    # 0.05 s, so ``cancel()`` drops it before ``slow_push`` ever runs. The
+    # assertion then fails for the one reason that is NOT a defect -- there was
+    # no upload in flight to let finish, and therefore no cleanup race either.
+    # Waiting on the thread itself makes the test exercise what its name says.
+    for _ in range(200):
+        if started.is_set():
+            break
+        await asyncio.sleep(0.01)
+    assert started.is_set(), "the push never started; the test never reached its own premise"
+
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task

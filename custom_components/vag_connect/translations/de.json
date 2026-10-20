@@ -2962,6 +2962,9 @@
     "historical_portal_not_ready": {
       "message": "Das EU-Data-Act-Portal ist noch nicht bereit. Warte, bis die Integration nach der Einrichtung einmal abgefragt hat, und versuche den Verlaufsexport dann erneut."
     },
+    "historical_export_empty": {
+      "message": "Es wurde nichts importiert: Das EU-Data-Act-Portal hat derzeit keinen einmaligen Verlaufsexport für dieses Fahrzeug ({reason}). Steht dort no_request, wurde der Export im Portal noch nicht angefordert oder der angeforderte ist inzwischen abgelaufen. Steht dort empty oder no_content, hat das Portal die Anforderung angenommen, die Datei aber noch nicht erzeugt – das kann mehrere Stunden dauern."
+    },
     "historical_disabled": {
       "message": "Der einmalige historische Export ist derzeit deaktiviert."
     },
