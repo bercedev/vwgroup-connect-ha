@@ -78,9 +78,34 @@ class AgentRelayTransport(NetworkAdbTransport):
         The agent serialises Android's live accessibility node tree into the same
         XML shape ``uiautomator dump`` produces, so ``screen.parse_ui_dump`` and
         every selector in the presets work unchanged across all three transports.
+
+        An answer with no screen in it is a FAILURE, not an empty screen. This
+        used to return ``str(value or "")``, and the agent is a separate app
+        that reports ``{"ok": true, "value": …}``: one that walks the
+        accessibility tree and finds no window — display off, a secure screen,
+        the car app not in front — reports success with nothing in it. That
+        empty string parsed to zero nodes, and the read path reads zero nodes as
+        a car that had nothing to say: the overview anchor check is skipped
+        (it is guarded on there being nodes at all), the adaptive failure
+        backoff is RESET, and the poll is recorded as healthy. So the one
+        outcome that most needs to be visible was the one that left no trace.
+        ``NetworkAdbTransport.dump_ui`` has refused a dump with no
+        ``<hierarchy`` in it since v2.26.0 for the same reason; this is that
+        guard, on the transport that was missing it.
+
+        No retry here, unlike the ADB side. One more attempt costs another
+        round trip through the agent's own outbound poll, and the usual reason
+        the tree is empty — a screen the agent cannot see — is not one that
+        changes in the seconds a retry would take.
         """
-        xml = await self._broker.command("dump_ui", timeout_s=timeout_s)
-        return str(xml or "")
+        xml = str(await self._broker.command("dump_ui", timeout_s=timeout_s) or "")
+        if "<hierarchy" not in xml:
+            raise CompanionTransportError(
+                "the companion agent returned no screen; the phone may be "
+                "asleep, the car app may not be in the foreground, or the "
+                "screen may be secured"
+            )
+        return xml
 
     async def foreground_app(self, package: str, timeout_s: float = 10.0) -> None:
         await self._broker.command(
