@@ -1059,6 +1059,14 @@ class DataActScraper:
                 }),
             ) as resp:
                 if resp.status == 401:
+                    # #1867 (@alagerqv) — the sibling branch four lines down
+                    # logs its status and this one logged nothing, so the
+                    # repair appeared in his log with no line next to it
+                    # saying where it came from.
+                    _LOGGER.debug(
+                        "metadata/partial HTTP 401 for VIN %s — portal "
+                        "session expired", _mask_vin(vin),
+                    )
                     raise DataActSessionExpiredError(
                         "metadata/partial returned 401 - portal session expired"
                     )
@@ -1210,6 +1218,11 @@ class DataActScraper:
                     headers=self._hdrs(headers),
                 ) as resp:
                     if resp.status == 401:
+                        # #1867 — same silent raise as the metadata probe.
+                        _LOGGER.debug(
+                            "requests/partial HTTP 401 for VIN %s — portal "
+                            "session expired", _mask_vin(vin),
+                        )
                         raise DataActSessionExpiredError(
                             "requests/partial returned 401 - portal session expired"
                         )
