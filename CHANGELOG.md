@@ -580,6 +580,33 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   explanation. Unscoped triggers and conditions are untouched and still apply
   to every vehicle, which is their documented behaviour.
 
+- **A Volkswagen server outage or a rate-limited account is no longer reported
+  as a wrong password.** The login walks a list of strategies, and its catch-all
+  redacts the message of whatever the last one raised — for a good reason,
+  written at the site: a low-level network error's text can carry the full OAuth
+  callback URL, and those tokens decode to the owner's e-mail and a working
+  access token. That redaction stays. What was wrong is that the error's **class**
+  was thrown away with its message, so everything came out as a plain
+  authentication failure.
+
+  That was never only a wording problem. On the polling path an authentication
+  failure becomes "invalid credentials" and starts a re-authentication flow, so
+  a VW 5xx storm or an account their backend had temporarily rate-limited asked
+  people to re-enter credentials that were never wrong — the exact
+  reconfiguring-during-an-outage that the dedicated error classes were created
+  to prevent, with their own translated messages already sitting in the config
+  flow and their own handling already in the coordinator's self-healing-error
+  check. All of it was simply unreachable from that one `raise`.
+
+  Three classes now come through as themselves: the backend-unavailable error,
+  the rate-limit error, and the volkswagen.de site-unavailable error. The bar
+  for being on that list is deliberately narrow and is pinned by a test: the
+  message has to be one this integration wrote, built from a status code and a
+  brand name, and must never be able to carry a URL, an address or a token.
+  Everything else, including an error carrying a request URL of our own, is
+  still redacted and still flattened exactly as before
+  ([#1855](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1855)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
