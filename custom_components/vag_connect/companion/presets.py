@@ -1322,6 +1322,99 @@ def _maps_latlon(raw: str) -> tuple[float, float] | None:
     return None
 
 
+# ── is the car charging? ──────────────────────────────────────────────────
+#
+# #968 (@plainmad) — this used to end in a bare-verb search: if "Charging" (or
+# "Lädt" / "Wird geladen") appeared ANYWHERE in the label, the answer was yes.
+# In front of it sat a list of explicit not-charging phrasings, added in v4.4.0
+# when app 4.3.2 began narrating "… Charging stopped".
+#
+# That list can never be completed, and the proof arrived from @plainmad's Golf
+# GTE Mk8 on app 4.6.4, plugged in with his energy provider holding the session
+# at zero power. His screen says:
+#
+#   "Charging status. Battery charge level: 86 per cent.
+#    Charging station shows current status"
+#   "Battery 86 % • Check charging station"
+#   "Start charging. Check charging status"
+#
+# All three contain the verb and none of them is a charging claim; the third is
+# a button offering to START. We reported charging for all three. 4.3.2 needed
+# one blocklist entry, 4.6.4 needs another, and "Start charging" was never
+# covered at all.
+#
+# So stop searching the blob and read the state where the state is. Across
+# every dump in tests/fixtures/companion_battery the long label has one shape:
+#
+#   "Charging status. Battery charge level: N per cent. <STATE>"
+#   "Ladestatus. Batterieladung: N Prozent. <STATE>"
+#
+# and the genuinely-charging ones spell the state "Currently charging" or
+# "Lädt gerade" — never the bare verb. The compact tile ("40% • Charging",
+# "Battery 86 % • Check charging station") puts its state after the separator,
+# and THERE the bare verb really is the whole state. Judge the extracted
+# clause, so the verb counts as an answer only where it is the answer.
+#
+# Measured over all 16 battery fixtures plus @plainmad's dump: 13 of 13 labels
+# with a recorded expectation come out right, against 4 wrong on the old rule,
+# and about twenty settings-screen labels ("Charging up to (50-100%)",
+# "Reduced AC charging current") stop reading as charging.
+_CHG_NOT = re.compile(
+    r"(?:Charging\s*(?:stopped|paused|complete[d]?)|Ladevorgang\s*"
+    r"(?:beendet|gestoppt|pausiert)|Nicht\s*(?:geladen|verbunden)"
+    r"|Not\s*(?:charging|connected)|Target\s*charge\s*level\s*reached"
+    r"|Zielladestand\s*erreicht|Fully\s*charged|Vollständig\s*geladen)",
+    re.I,
+)
+#: The long status label, capturing its trailing state clause.
+_CHG_LONG = re.compile(
+    r"(?:Charging\s+status|Ladestatus)\b.*\.\s*([^.]+?)\s*\.?\s*$",
+    re.I | re.S,
+)
+#: The compact tile, capturing whatever follows the percentage.
+_CHG_COMPACT = re.compile(r"\d+\s*%\s*\W+\s*(.+?)\s*$", re.I)
+#: An explicit charging state, in any position.
+_CHG_YES = re.compile(
+    r"(?:Currently\s+charging|Lädt\s+gerade|Wird\s+(?:gerade\s+)?geladen"
+    r"|Charging\s+in\s+progress)",
+    re.I,
+)
+#: The bare verb, accepted ONLY as a complete state clause.
+_CHG_YES_BARE = re.compile(r"^(?:Charging|Laden|Lädt)\b\s*$", re.I)
+
+
+def _charging_from_label(raw: str) -> bool | None:
+    """True / False / None (unknown) for a charging-state label.
+
+    ``None`` rather than ``False`` for wording we do not recognise: a wrong
+    True is a confident lie about the car, and a wrong False is one too. An
+    unknown leaves the previous reading alone and shows up in diagnostics as
+    an unparsed label, which is what should happen when the app changes its
+    phrasing again.
+    """
+    if _CHG_NOT.search(raw):
+        return False
+    for pattern in (_CHG_LONG, _CHG_COMPACT):
+        match = pattern.search(raw)
+        if not match:
+            continue
+        # Known grammar: the state clause decides, on its own. If the app meant
+        # charging it says so there, so anything else is not charging.
+        #
+        # The bare verb counts here and only here. The ID.3 on app 4.3.2 writes
+        # the state as the bare word -- "… 42 per cent. Charging" -- on a car
+        # that really is charging, while the Golf on 4.6.4 writes "Currently
+        # charging"; both are the whole clause. That is the entire distinction
+        # this function exists to make: "Charging" as the complete state is an
+        # answer, "Charging station shows current status" is not, and the old
+        # rule could not tell them apart because it never looked at position.
+        state = match.group(1)
+        return bool(_CHG_YES_BARE.search(state) or _CHG_YES.search(state))
+    if _CHG_YES.search(raw):
+        return True
+    return None
+
+
 def coerce(parse: str, raw: str | None) -> object | None:
     """Turn a matched raw string into the typed value the field expects."""
     if raw is None:
@@ -1350,21 +1443,7 @@ def coerce(parse: str, raw: str | None) -> object | None:
             return round(val * 1.60934)
         return val
     if parse == "bool_charging":
-        # v4.4.0 — the MEB/ID app 4.3.2 narrates state and level in ONE label:
-        # "Charging status. Battery charge level: 79 per cent. Charging stopped".
-        # "Charging" appears in that sentence even when the car is NOT charging,
-        # so the explicit stopped/paused wording has to win over the bare verb.
-        if re.search(
-            r"(?:Charging\s*(?:stopped|paused|complete[d]?)|Ladevorgang\s*"
-            r"(?:beendet|gestoppt|pausiert)|Nicht\s*(?:geladen|verbunden)"
-            r"|Not\s*(?:charging|connected)|Target\s*charge\s*level\s*reached"
-            r"|Zielladestand\s*erreicht|Fully\s*charged|Vollständig\s*geladen)",
-            raw, re.I,
-        ):
-            return False
-        if re.search(r"(?:Lädt|Wird geladen|Charging)", raw, re.I):
-            return True
-        return None
+        return _charging_from_label(raw)
     if parse == "days":
         # #968 (plainmad, live 4.3.2 dump) — the Vehicle Health report writes
         # the service countdown as "71 days / 12,100 mi": a day count AND a

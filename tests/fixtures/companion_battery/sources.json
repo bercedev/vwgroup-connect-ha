@@ -111,5 +111,13 @@
     "source": "https://github.com/gszigethy/vwgroup-connect-ha/blob/481a07b7fbe7fd457cb5e0774ca3815f55140308/docs/COMPANION_BATTERY.md",
     "related_issue": "https://github.com/its-me-prash/vwgroup-connect-ha/issues/968",
     "note": "Extraction on 2026-10-04 and APK/English split hashes documented in commit 481a07b7. English resource labels only, expanded by later commits for tested companion readers; full string tables and APK code omitted. No personal/place data. No original extraction filename or #968 comment for this JSON is recorded in git history."
+  },
+  {
+    "fixture": "gte_plugged_no_power_464.xml",
+    "contributor": "plainmad",
+    "original_file": "Golf GTE Mk8 App 4.6.4 Charge screen with no power being provided.xml",
+    "source": "https://github.com/its-me-prash/vwgroup-connect-ha/issues/968#issuecomment-6106983090",
+    "attachment": "https://github.com/user-attachments/files/33280218/Golf.GTE.Mk8.App.4.6.4.Charge.screen.with.no.power.being.provided.xml",
+    "note": "App 4.6.4. Car plugged in while the energy provider holds the session at zero power, so the app narrates 'Charging station shows current status' instead of a charge state. Committed verbatim as uploaded; scanned for VINs, e-mail addresses, coordinate pairs, tokens, UUIDs and plates with a planted-VIN control to prove the scan works - six labels and three resource ids, none identifying."
   }
 ]
