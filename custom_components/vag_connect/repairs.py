@@ -688,13 +688,22 @@ def raise_issue_stale_data(
     *,
     masked_vin: str,
     age_hours: int,
+    car: str | None = None,
 ) -> None:
     """Surface a car whose data has not refreshed in a long time (per-VIN).
 
     WARNING, not error: last-known values still show, it is not a hard failure —
-    the car may simply be parked and asleep, or its EU Data Act feed may have
-    lapsed. Dismissible; auto-clears the moment a fresher capture arrives. Keyed
-    per VIN so a multi-car account isolates the stale one.
+    the car may simply be parked and asleep, or its data source may have lapsed.
+    Dismissible; auto-clears the moment a fresher capture arrives. Keyed per VIN
+    so a multi-car account isolates the stale one.
+
+    #1896 (@starwarsfan) — ``car`` is how the card names the vehicle, and it is
+    the same label the device page uses ("Audi Q4 e-tron"). The title used to
+    carry the masked VIN alone, which on his two-car setup meant the warning
+    told him something was wrong without telling him *what*: ``***022149`` is
+    only recognisable to someone who has gone and looked it up. Falls back to
+    the masked VIN when no label is available, which is strictly what it did
+    before.
     """
     # #1626 — the issue id must NOT embed the raw VIN: it is dumped verbatim in
     # config-entry diagnostics (bypassing the VIN redaction) and has leaked a full
@@ -709,7 +718,11 @@ def raise_issue_stale_data(
         is_persistent=False,
         severity=ir.IssueSeverity.WARNING,
         translation_key="stale_data",
-        translation_placeholders={"vin": masked_vin, "age": str(age_hours)},
+        translation_placeholders={
+            "car": car or masked_vin,
+            "vin": masked_vin,
+            "age": str(age_hours),
+        },
         # learn_more_url belongs on the issue, NOT in the translations schema
         # (Hassfest rejects it there).
         learn_more_url="https://github.com/its-me-prash/vwgroup-connect-ha/issues/465",

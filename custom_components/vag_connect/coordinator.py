@@ -7676,9 +7676,17 @@ class VagConnectCoordinator(DataUpdateCoordinator):
                 else (False if _moved else _age >= _threshold_s)
             )
             if _age is not None and _age >= _threshold_s and not _moved:
+                # #1896 — name the car the way the device page names it, from
+                # the same helper, so the two cannot drift apart. A warning that
+                # says only "***022149" is unactionable on a two-car account:
+                # the reporter had an Audi and a Škoda and could not tell which
+                # one it meant without looking the VIN up.
+                from .entity_base import _device_name  # noqa: PLC0415
+
                 raise_issue_stale_data(
                     self.hass, self.entry.entry_id, _vin_sd,
                     masked_vin=mask_vin(_vin_sd), age_hours=int(_age // 3600),
+                    car=_device_name(data, self.entry.data.get("brand", "vag")),
                 )
             else:
                 clear_stale_data_issue(self.hass, self.entry.entry_id, _vin_sd)
