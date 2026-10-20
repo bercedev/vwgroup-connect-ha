@@ -48,6 +48,18 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ### Behoben / Fixed
 
+- **An EV whose EU Data Act feed reports only the pack's energy content is
+  recognised as having a battery again (#1902).** @keylogicjohan's ID.7 sends
+  `REPORT_TYPE_ENERGY_CONTENTS` with the available and maximal kWh, but no SoC,
+  electric range, charging state or pack voltage. None of the drivetrain tests
+  could fire, so `has_battery` stayed false and every electric entity was
+  skipped, including the available-energy and capacity sensors whose values
+  were there. A capacity of 5 kWh or more now counts as evidence of a drive
+  battery, the same way a pack above 60 V does since #1661: it sets
+  `has_battery` only and leaves the EV-versus-hybrid verdict to SoC and range.
+  5 kWh is far above a 48 V mild-hybrid pack and below the smallest plug-in
+  hybrid pack. Thanks @keylogicjohan for the diagnostics and the analysis.
+
 - **The "vehicle data hasn't refreshed" warning now says which car, and stops
   sending everyone to volkswagen.de.** @starwarsfan runs an Audi Q4 e-tron and a
   Škoda on one setup and got a card titled with the masked VIN alone —

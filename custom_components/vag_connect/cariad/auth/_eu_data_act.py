@@ -5505,6 +5505,16 @@ def map_dataset_to_vehicle_data(
         and d.hv_battery_pack_voltage_v >= 60
     ):
         d.has_battery = True
+    # #1902 (@keylogicjohan's ID.7) — the same class as #1661, for a feed that
+    # carries the pack's energy content (REPORT_TYPE_ENERGY_CONTENTS) instead of
+    # its voltage: no SoC, range, charging state or pack voltage, so the EV
+    # entities stayed hidden although battery_available_kwh and battery_cap_kwh
+    # were right there. A capacity in the traction-pack range is the same kind of
+    # evidence and gets the same treatment: has_battery only, never is_electric.
+    # 5 kWh is well above any 48 V mild-hybrid pack (under 2 kWh) and well below
+    # the smallest plug-in hybrid pack.
+    if d.battery_cap_kwh is not None and d.battery_cap_kwh >= 5:
+        d.has_battery = True
     if has_e:
         d.has_battery = True
     if has_c:
