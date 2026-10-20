@@ -789,7 +789,7 @@ class CariadBaseClient:
         )
         try:
             connector = WebsiteAuthProxyConnector(
-                session, self._email, self._password, brand=self._brand.name,
+                session, self._email, self._password,
             )
             connector.import_cookies(cookies)
             # Resume via the prompt=none SILENT re-authorize (connector.refresh):
@@ -1037,7 +1037,7 @@ class CariadBaseClient:
         from ..exceptions import EmailTwoFactorRequiredError  # noqa: PLC0415
 
         connector = WebsiteAuthProxyConnector(
-            self._session, self._email, self._password, brand=self._brand.name,
+            self._session, self._email, self._password,
         )
         # v2.14.3 — hydrate persisted session cookies BEFORE begin_login(). When
         # the cookies are still valid, the authproxy redirects the already-
