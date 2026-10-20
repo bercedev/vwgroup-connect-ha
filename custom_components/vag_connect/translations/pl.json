@@ -587,6 +587,21 @@
       "last_trip_avg_electric_consumption_kwh_100km": {
         "name": "Ostatnia Trasa — Średnie Zużycie Energii"
       },
+      "companion_long_trip_distance_km": {
+        "name": "Ostatnia Długa Trasa — Dystans"
+      },
+      "companion_long_trip_duration_min": {
+        "name": "Ostatnia Długa Trasa — Czas jazdy"
+      },
+      "companion_long_trip_avg_speed_kmh": {
+        "name": "Ostatnia Długa Trasa — Średnia Prędkość"
+      },
+      "companion_long_trip_avg_fuel_consumption_l_100km": {
+        "name": "Ostatnia Długa Trasa — Średnie Zużycie Paliwa"
+      },
+      "companion_long_trip_avg_electric_consumption_kwh_100km": {
+        "name": "Ostatnia Długa Trasa — Średnie Zużycie Energii"
+      },
       "software_version": {
         "name": "Wersja Oprogramowania"
       },

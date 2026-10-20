@@ -22,6 +22,18 @@ timer, beside Cancel (``common_button_cancel``), which restores it. A
 successful save goes back to the list (``EditDepartureTimerViewModel``).
 Language independent: ids, digits and the picker's own layout only; Save and
 Cancel come from the installed app's translations.
+
+The 4.8.1 Compose editor (``editDepartureTimerWeekday`` / ``…Repeat``) hides
+its time picker with ``hideFromAccessibility()``, and its day buttons
+(``cta_MONDAY`` …) expose no selected state. ``uiautomator dump`` skips the
+hidden picker; Compose still exports it, so the a11y helper (``a11y/``) reads
+its wheels: one range node each (hour, minute, AM/PM on a 12-hour phone) with
+the shown value as state description and SET_PROGRESS as the way to set it.
+``read_compose_clock`` parses that output by structure, not by label, so it
+does not depend on the app's language. The days come from the list's
+recurrence label and cannot be checked on the page, so they are never changed
+there; only Repeat is observable on the page itself, so a TimerPage is never
+built for this editor.
 """
 from __future__ import annotations
 
@@ -65,6 +77,7 @@ class DepartureRow:
     time: str  # 24-hour "HH:MM"
     switch: UiNode
     clock: UiNode  # the time text: inside the row, clear of the switch
+    bounds: tuple[int, int, int, int]
 
 
 def departure_rows(nodes: list[UiNode]) -> list[DepartureRow]:
@@ -108,7 +121,7 @@ def departure_rows(nodes: list[UiNode]) -> list[DepartureRow]:
             hour = hour % 12 + (12 if meridiem == "p" else 0)
         if hour > 23 or minute > 59:
             continue
-        rows.append(DepartureRow(row.bounds[1], switch.checked, f"{hour:02d}:{minute:02d}", switch, clock))
+        rows.append(DepartureRow(row.bounds[1], switch.checked, f"{hour:02d}:{minute:02d}", switch, clock, row.bounds))
     rows.sort(key=lambda r: r.top)
     return rows
 
@@ -235,6 +248,39 @@ def page_fields(page: TimerPage, slot: int) -> dict[str, object]:
     }
 
 
+def is_compose_timer_page(nodes: list[UiNode]) -> bool:
+    """Recognise the new editor without claiming its hidden clock is readable."""
+    ids = {_rid(n) for n in nodes}
+    return {"editDepartureTimerWeekday", "editDepartureTimerRepeat"} <= ids
+
+
+def read_timer_details(nodes: list[UiNode], slot: int) -> dict[str, object]:
+    """Read only observable state, using the legacy or Compose layout adapter.
+
+    The 4.8.1 tree omits the clock and weekday selection semantics. Its day
+    buttons all report selected=false, even for an active weekday schedule.
+    Never interpret these missing semantics as an empty schedule, and never
+    return a writable TimerPage from incomplete state.
+    """
+    legacy = read_timer_page(nodes)
+    if legacy is not None:
+        return page_fields(legacy, slot)
+    if not is_compose_timer_page(nodes):
+        return {}
+    groups = [n for n in nodes if _rid(n) == "editDepartureTimerRepeat" and n.bounds]
+    if len(groups) != 1:
+        return {}
+    group = groups[0]
+    assert group.bounds is not None
+    switches = [n for n in nodes if n.checkable and n.bounds and _inside(n, group.bounds)]
+    # Compose duplicates the switch semantics at the same bounds. Conflicting
+    # states or distinct switches are ambiguous and must remain unknown.
+    states = {(n.bounds, n.checked) for n in switches}
+    if len(states) != 1:
+        return {}
+    return {f"departure_timer_{slot}_repeat": switches[0].checked}
+
+
 def find_toolbar_text(nodes: list[UiNode], labels: set[str], page_top: int) -> UiNode | None:
     """A toolbar text item (Save, Cancel) above the page, by its label."""
     for node in nodes:
@@ -244,3 +290,129 @@ def find_toolbar_text(nodes: list[UiNode], labels: set[str], page_top: int) -> U
             if text and text.strip().casefold() in labels:
                 return node
     return None
+
+
+# -- the 4.8.1 Compose editor's hidden time picker ---------------------------
+
+
+@dataclass(frozen=True)
+class HiddenWheel:
+    """One wheel of the hidden picker, as the a11y helper reports it."""
+
+    index: int  # position among the screen's range nodes (A11yTree "set <index>")
+    left: int
+    progress: float
+    maximum: float
+    state: str  # the value the wheel shows ("06", "05", "AM")
+
+
+@dataclass(frozen=True)
+class ComposeClock:
+    """The picker's three (12-hour) or two (24-hour) wheels and the time they show."""
+
+    hour: HiddenWheel
+    minute: HiddenWheel
+    meridiem: HiddenWheel | None
+    hour_value: int  # 0-23
+    minute_value: int
+
+    @property
+    def time(self) -> str:
+        return f"{self.hour_value:02d}:{self.minute_value:02d}"
+
+    @property
+    def pm(self) -> bool:
+        return self.meridiem is not None and round(self.meridiem.progress) == 1
+
+
+def _hidden_nodes(tree: str) -> list[dict[str, str]]:
+    nodes = []
+    for line in tree.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 7 or parts[0] != "NODE":
+            continue
+        node = {"left": parts[2], "top": parts[3], "right": parts[4], "bottom": parts[5]}
+        for field in parts[6:]:
+            key, _, value = field.partition("=")
+            node[key] = value
+        nodes.append(node)
+    return nodes
+
+
+def read_compose_clock(tree: str) -> ComposeClock | None:
+    """The hidden picker's wheels, left to right; None unless unambiguous.
+
+    The picker is the only thing on the editor with range nodes. Two or three
+    of them are expected: two-digit wheels for hour and minute, and on a
+    12-hour phone a two-value wheel (range 0 to 1) for AM/PM, whose first value
+    is AM. Anything else is refused rather than guessed.
+    """
+    ranged: list[HiddenWheel] = []
+    for node in _hidden_nodes(tree):
+        if "range" not in node:
+            continue
+        try:
+            current, _minimum, maximum = (float(v) for v in node["range"].split("/"))
+            left = int(node["left"])
+        except ValueError:
+            return None
+        ranged.append(HiddenWheel(len(ranged), left, current, maximum, node.get("state", "").strip()))
+    if len(ranged) not in (2, 3):
+        return None
+    wheels = sorted(ranged, key=lambda w: w.left)
+    digits = [w for w in wheels if w.state.isdigit() and len(w.state) <= 2]
+    meridiem = [w for w in wheels if abs(w.maximum - 1.0) < 1e-6]
+    if len(digits) != 2 or len(meridiem) != len(wheels) - 2:
+        return None
+    hour, minute = digits
+    hour_value, minute_value = int(hour.state), int(minute.state)
+    if minute_value > 59:
+        return None
+    if meridiem:
+        if not 1 <= hour_value <= 12:
+            return None
+        hour_value = hour_value % 12 + (12 if round(meridiem[0].progress) == 1 else 0)
+    elif hour_value > 23:
+        return None
+    return ComposeClock(hour, minute, meridiem[0] if meridiem else None, hour_value, minute_value)
+
+
+def wheel_target(wheel: HiddenWheel, shown: int, wanted: int, count: int) -> float:
+    """The progress that turns a cyclic wheel from ``shown`` to ``wanted``.
+
+    The wheels are endless lists: one item further is one more progress, and
+    the shorter way round is taken. ``shown``/``wanted`` are item positions.
+    """
+    ahead = (wanted - shown) % count
+    step = ahead if ahead <= count // 2 else ahead - count
+    return wheel.progress + step
+
+
+def compose_repeat_switch(nodes: list[UiNode]) -> UiNode | None:
+    """The Repeat switch, when exactly one state is shown for it."""
+    groups = [n for n in nodes if _rid(n) == "editDepartureTimerRepeat" and n.bounds]
+    if len(groups) != 1 or groups[0].bounds is None:
+        return None
+    box = groups[0].bounds
+    switches = [n for n in nodes if n.checkable and n.bounds and n.tap_point and _inside(n, box)]
+    if len({n.checked for n in switches}) != 1:
+        return None
+    return switches[0]
+
+
+def compose_page_top(nodes: list[UiNode]) -> int | None:
+    """Below the toolbar: the top of the editor's content."""
+    tops = [n.bounds[1] for n in nodes if n.bounds and n.scrollable]
+    if not tops:
+        tops = [n.bounds[1] for n in nodes if n.bounds and _rid(n) == "editDepartureTimerWeekday"]
+    return min(tops) if tops else None
+
+
+def compose_toolbar_leading(nodes: list[UiNode], page_top: int) -> UiNode | None:
+    """The toolbar's leading control: the back arrow, or X while edited (Cancel)."""
+    lead = [
+        n for n in nodes
+        if n.clickable and n.enabled and n.tap_point and n.bounds is not None
+        and n.bounds[3] <= page_top and not (n.text or "").strip()
+    ]
+    return min(lead, key=lambda n: n.bounds[0] if n.bounds else 0, default=None)
