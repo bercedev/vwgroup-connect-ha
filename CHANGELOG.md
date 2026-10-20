@@ -46,6 +46,9 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+
+## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist
+
 ### Hinzugefügt / Added
 
 - **Six more readings from the EU Data Act feed: climate humidity and power
