@@ -99,6 +99,32 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   is now pinned by a test that checks the object itself, rather than one that
   checked how it was built.
 
+- **The read-only volkswagen.de channel can now be added to a Volkswagen
+  Commercial Vehicles entry.** @benbrummer could not add it to a T6.1, and when
+  I went looking for the reason I expected to find one. The whole restriction
+  was a single equality check at the top of the sign-in step, comparing the
+  entry's brand against one exact string. Nothing downstream of it is
+  brand-specific: the connector identifies itself to the site as `volkswagen`
+  either way, because that names *volkswagen.de* rather than our brand list.
+  And the two brands are already treated as one thing where it matters most —
+  Commercial Vehicles uses the same We Connect app, and its EU Data Act
+  configuration is the Volkswagen one with a different state name. His own
+  report said the same from the outside: identical entity count and identical
+  values whether the van is set up as Volkswagen EU or as Commercial Vehicles.
+
+  What is still not established is whether volkswagen.de serves a Commercial
+  VIN once the sign-in is allowed to start. That is a question about VW's site,
+  and the gate was the thing preventing anyone from asking it; the channel is
+  read-only, so the cost of being wrong is a failed sign-in the owner sees at
+  once rather than anything silent. If Commercial VINs turn out not to be
+  served, the gate comes back — this time with a reason attached to it. Every
+  other brand is still refused, the abort text is unchanged so its twelve
+  translations stay accurate, and a test checks that the commercial client
+  really does inherit the arming method, because a widened gate that handed
+  someone a channel which is stored, shown as configured and never armed would
+  be a worse outcome than the refusal it replaces
+  ([#1801](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1801)).
+
 ### Behoben / Fixed
 
 - **When the manufacturer says "too many requests, wait N seconds", the

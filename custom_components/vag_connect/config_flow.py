@@ -92,6 +92,29 @@ def _brand_label(brand: str) -> str:
     return BRANDS.get(brand, brand.replace("_", " ").title())
 
 
+#: #1801 (@benbrummer) — brands allowed to add the supplementary
+#: volkswagen.de read channel.
+#:
+#: This was a bare ``!= "volkswagen"`` and refused Commercial Vehicles for no
+#: measured reason: nothing downstream of the gate is brand-specific, the
+#: connector is constructed with ``brand="volkswagen"`` either way, and the two
+#: brands are already treated as one thing where it matters most — Commercial
+#: Vehicles uses the same We Connect app, and its EU Data Act configuration is
+#: the Volkswagen one with a different state name (#1316). The reporter's own
+#: T6.1 returns an identical entity count and identical values whether the
+#: entry is set up as Volkswagen EU or as Commercial Vehicles.
+#:
+#: What is NOT established is whether volkswagen.de serves a Commercial VIN
+#: once the sign-in is allowed to start. That is a question about VW's site,
+#: and the gate was the thing preventing anyone from asking it. The channel is
+#: read-only, so the cost of being wrong is a failed sign-in the owner sees
+#: immediately — not a silent one. If it turns out Commercial VINs are not
+#: served, the gate comes back WITH a reason attached to it.
+#:
+#: The abort string ("This channel is only available for Volkswagen") stays
+#: correct in all twelve languages: both members are Volkswagen.
+_VWDE_BRANDS = frozenset({"volkswagen", "volkswagen_commercial"})
+
 # ── Brand selector options with icons ────────────────────────────────────────
 # HA renders these as a visual select list (not a plain dropdown)
 _BRAND_OPTIONS: list[SelectOptionDict] = [
@@ -4095,7 +4118,7 @@ class VagConnectOptionsFlow(VwDeReauthMixin, config_entries.OptionsFlow):
         only; on success stores the session cookies as a supplementary channel
         and reloads so the coordinator merges it onto the primary."""
         errors: dict[str, str] = {}
-        if self._config_entry.data.get(CONF_BRAND) != "volkswagen":
+        if self._config_entry.data.get(CONF_BRAND) not in _VWDE_BRANDS:
             return self.async_abort(reason="not_volkswagen")
 
         if user_input is not None:
