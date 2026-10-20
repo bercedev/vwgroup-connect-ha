@@ -530,6 +530,34 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   before cancelling, which is what the test's own name claims it does. No
   production code changed; the behaviour it guards is unaltered.
 
+- **A portal session that has expired no longer makes the integration re-post a
+  data request and re-raise the same notice on every restart.** @alagerqv read
+  the kickoff loop and found what his own entry was doing: his recorded attempt
+  time sat frozen at 10 October, long past the 24-hour window that is supposed
+  to hold the next attempt off, so every setup tried again and raised the
+  "portal session expired" card again.
+
+  The cause is one word. The loop records the attempt before posting, with a
+  comment explaining that the record is what makes the backoff survive a
+  restart — and the session-expired handler then returned straight out of the
+  method, past the only line that writes it. The promise in the comment and the
+  behaviour of the code had been disagreeing since the handler was added. It
+  breaks out of the loop now instead, so the record reaches the write.
+
+  That alone would have fixed only half of it. The handler also records the
+  attempt itself when nothing has yet: a refused *probe* raises before the
+  record is made, and a probe the portal refuses is a failed attempt exactly as
+  much as a refused post is. An identifier adopted for an earlier vehicle in the
+  same pass now survives too, instead of being discarded along with everything
+  else.
+
+  And three places raised this condition without logging anything, which is why
+  the card turned up in his log with no line next to it saying where it came
+  from — one of them sitting directly above a sibling branch that has always
+  logged its status. All three now say what happened, and the card itself
+  announces that it is being raised at a level a normal installation records
+  ([#1867](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1867)).
+
 ### Sicherheit / Security
 
 - **Sign-in host hardening.** Two guards in the login code decided whether a
