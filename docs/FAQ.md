@@ -298,13 +298,23 @@ The figures affected are the five short-term ones:
 
 ### Why they vanished
 
-They were read from the EU Data Act portal's `short_term_data_*` fields. The
-portal stopped carrying that cluster in September 2026 — nothing in the
-integration changed, and no setting on your side can bring it back. Reports
-about this were answered at the time with "the cluster is gone, there is
-nothing to fix", which was true of the portal and **too broad as a general
-answer**: a parser for the other channel was already owed and shipped a week
-later. That wording is the reason this entry exists.
+They were read from the EU Data Act portal's `short_term_data_*` fields, and
+**Volkswagen's** portal realm stopped carrying that cluster in September 2026.
+Nothing in the integration changed, and no setting on your side can bring it
+back.
+
+**This is specific to the Volkswagen realm.** The code that reads those fields
+is brand-agnostic — it takes whatever the portal delivers — so a **CUPRA or
+SEAT** entry fed by the portal can still receive the short-term figures, and on
+those cars "last trip distance is unknown" usually means the car has not
+uploaded a completed trip yet rather than that the data is gone. Give it a
+drive cycle or two before treating it as a fault.
+
+Saying that plainly matters here, because the reason this entry exists is a
+wording problem of exactly this kind: reports were answered at the time with
+"the cluster is gone, there is nothing to fix", which was true of the
+Volkswagen realm and **too broad as a general answer** — a parser for the other
+channel was already owed and shipped a week later.
 
 ### How to get them back
 

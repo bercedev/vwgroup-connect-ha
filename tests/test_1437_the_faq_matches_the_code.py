@@ -179,6 +179,67 @@ def test_the_entry_still_says_what_it_does_not_restore() -> None:
         )
 
 
+def test_the_entry_does_not_blame_the_portal_in_general() -> None:
+    """The failure mode this entry exists to correct, applied to the entry.
+
+    Discussion #1415 caught the first draft doing exactly what #1437 was
+    about. A portal-fed CUPRA Tavascan owner had been told, correctly, that
+    last-trip distance *does* come from the portal on his car — while the draft
+    said flatly that "the portal stopped carrying that cluster". Both cannot be
+    read as general truths.
+
+    Measured rather than argued: the ``short_term_data_*`` reader in
+    ``_eu_data_act.py`` has no brand or realm condition anywhere near it, so
+    the integration reads the cluster for whatever brand's portal delivers it.
+    What stopped is the **Volkswagen** realm. So the entry has to say which
+    realm, and must not state the unqualified version.
+    """
+    section = _section()
+    # Strip markdown emphasis and collapse whitespace before matching. The
+    # entry writes "**Volkswagen's** portal realm", so the asterisks sit
+    # between the words and a plain substring search misses it - the same
+    # invisible-character trap as the NBSP separator in #968.
+    low = re.sub(r"\s+", " ", re.sub(r"[*_`]+", "", section)).lower()
+
+    # the unqualified claim, in the shapes it would plausibly be written
+    for bad in (
+        "the portal stopped carrying",
+        "the portal no longer carries",
+        "the portal dropped",
+    ):
+        assert bad not in low, (
+            f"the entry says {bad!r} without naming a realm, which is the "
+            "too-broad wording #1437 was caused by"
+        )
+
+    assert "volkswagen's portal realm" in low or "volkswagen portal realm" in low, (
+        "the entry does not say WHICH realm stopped carrying the cluster"
+    )
+    # and it has to tell CUPRA/SEAT owners the opposite
+    assert "cupra" in low and "seat" in low, (
+        "the entry does not mention CUPRA/SEAT, whose portal may still carry "
+        "the cluster - those owners would read this as 'gone' and stop looking"
+    )
+
+
+def test_the_portal_reader_really_is_brand_agnostic() -> None:
+    """The premise of the paragraph above. If a brand gate ever appears around
+    the short-term reader, the FAQ's claim becomes wrong and this fails
+    first."""
+    import inspect
+
+    from custom_components.vag_connect.cariad.auth import _eu_data_act as eda
+
+    src = inspect.getsource(eda)
+    idx = src.index('first_src("short_term_data_mileage")')
+    window = src[max(0, idx - 1200):idx + 1200]
+    for gate in ("brand ==", 'brand in (', "state_brand ==", "realm =="):
+        assert gate not in window, (
+            f"a {gate!r} condition now sits around the short-term reader; the "
+            "FAQ says the reader is brand-agnostic and would need correcting"
+        )
+
+
 def test_the_entry_gives_the_version_floor() -> None:
     """Without a version the instruction fails silently for anyone older."""
     assert re.search(r"v?4\.11\.0", _section()), (
