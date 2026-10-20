@@ -95,6 +95,29 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   nothing to re-add, the car simply has not reported. All twelve languages
   ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
 
+- **The Scout's "official spec field" column stopped being empty for 2857 of
+  the catalogue's fields.** @GiuseppeAlbano's report
+  ([#1895](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1895))
+  listed one new Audi field with a dash where the official name belongs — and
+  that field is in the shipped catalogue twice, with a description. The lookup
+  reduced a dotted path to its last segment, on the assumption that a dot only
+  ever separates the container from the field name. 3206 of the 7990 field
+  names contain dots of their own: every `viwi_*` resource carries its
+  interface version, and the charging families are spelled as nested paths. His
+  field was looked up as `0_get_notifications`, which matches nothing. Only 349
+  of those 3206 resolved.
+
+  A quieter half came with it: `01_msp_elli.msp_elli_ocpi_cdr.currency`
+  resolved to the generic `currency` field — a different field with a different
+  unit and description — so a sensor auto-created from raw discovery could be
+  named and united from the wrong entry. Specific spellings are now tried
+  before general ones, and each index is consulted with the whole key rather
+  than only the tail.
+
+  Measured across every name, every prefixed name and every UUID in the
+  catalogue (21226 keys): 5714 that resolved to nothing now resolve, 698 now
+  resolve to their own exact entry instead of a generic one, and nothing that
+  resolved before stopped resolving.
 - **The FAQ now says where the vanished last-trip sensors went.**
   @fschulte2812 ([#1437](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1437))
   went thirteen days unanswered on a thread whose settled conclusion — "VW
