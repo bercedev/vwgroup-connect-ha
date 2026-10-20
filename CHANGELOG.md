@@ -387,6 +387,33 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   there is no retry, because another attempt there means another trip through
   the agent's own poll and the usual cause of an empty tree does not change in
   that time.
+- **The token refresh limit no longer announces a pause it never takes, and no
+  longer reports itself at error level once every poll.** The limit itself is
+  unchanged and correct: three refreshes per rolling hour, which is what keeps a
+  misbehaving entry from hammering the sign-in until the account is locked. What
+  was wrong was everything it said about itself. The message read *"pausing to
+  prevent IP ban; please reauthenticate from the UI"*, and nothing paused — the
+  call refuses one attempt and returns, so the next poll asks again and is
+  refused again. @georghaberkorn68-ctrl's CUPRA logged that sentence three times
+  per cycle, every three minutes, for hours across two days, which reads as a
+  runaway loop rather than as a limit doing its job. And the one instruction it
+  gave could not help him: his primary sign-in was being refused outright before
+  the portal fallback took over, so no credential he could type would change the
+  answer.
+
+  The refusal now says what it does — that it is refusing further refreshes, and
+  roughly when the next one is allowed, computed from the oldest attempt still
+  inside the window rather than from a constant. It is logged at error level
+  once per episode and at debug level while the budget stays spent, and the
+  "episode" resets as soon as an attempt is actually booked, so a genuinely new
+  storm weeks later is reported as news again. Where credentials are mentioned
+  at all, it is to say that re-entering them will not help when the sign-in
+  itself is what is being refused, and the errors that say *why* it is refused
+  sit directly above the line. The same guard exists a second time in the
+  Porsche client, which is not a subclass and had its own copy of both the
+  wording and the level; both are fixed, and a test fails if a third copy of the
+  old sentence ever ships
+  ([#1866](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1866)).
 - **Volkswagen Companion (ADB) reads on VW app 4.8.1.** The parking position
   read taps the button around the app's *Vehicle location* label (4.8.1 made
   the label itself not clickable) and never the map. The Driving data
