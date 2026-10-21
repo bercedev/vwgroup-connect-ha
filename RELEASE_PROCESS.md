@@ -115,6 +115,36 @@ second pair of eyes, not a guarantee. The guarantee is that
 Neither script checks section order or vocabulary, on purpose: this file has
 used 31 distinct headings and keeps past entries as written.
 
+### While a release is being cut, check where in-flight entries landed
+
+An open release pull request renames `[Unreleased]` to the new version and adds
+a fresh empty `[Unreleased]` above it. A feature branch that appends to
+`[Unreleased]` does **not** textually overlap that rename, so git merges the two
+without stopping — and the appended entry lands under the **released** version,
+while the fresh `[Unreleased]` stays empty.
+
+Reproduced in a throwaway repository: the merge is clean,
+`check_changelog_structure.py` exits 0, and nothing in CI reports it. The file
+is structurally valid; only the placement is wrong. Nothing is lost, but the
+entry ships inside a version that did not contain the change and is then
+missing from the next release's notes.
+
+This predates `.gitattributes` and is not caused by the union merge driver —
+measured with and without it, the outcome is identical, because there is no
+conflict for a merge driver to resolve.
+
+So, while a release pull request is open:
+
+1. prefer not to update feature branches onto `main`; wait until the release
+   has merged;
+2. if you must, re-read the `[Unreleased]` block afterwards and move anything
+   that slid into the released version back up;
+3. after the release merges, check `[Unreleased]` once before pushing anything
+   else.
+
+The `--base` entry-loss check does not catch this either — it asks whether an
+entry *vanished*, and this entry is still there, under the wrong heading.
+
 ## Language convention (v2.4.1+ — EN-primary, switched 2026-05-23)
 
 CHANGELOG entries + release notes + GH release titles use **English as

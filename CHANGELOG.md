@@ -67,6 +67,34 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   No behaviour changes for any existing entry: every call site already received
   the Volkswagen site regardless of what it passed.
 
+- **CHANGELOG.md merges resolve themselves now.** Landing seven pull requests
+  on 2026-10-20 took **thirteen** CHANGELOG conflict resolutions, every one of
+  them identical: both sides had appended one entry at the same place and "keep
+  both" was always right. There was not a single code conflict in the batch —
+  three of the seven touched the same files and their changes sat 26 to 39
+  lines apart. All the friction came from one file.
+
+  A one-line `.gitattributes` (`CHANGELOG.md merge=union`) resolves that shape
+  with no markers and no human. It is only safe because of a property the
+  repository already had: `add_changelog_entry.py` is insert-only, so the two
+  sides of such a merge are additions in the same place rather than competing
+  edits — and a test now says that out loud, so the driver cannot outlive its
+  own justification.
+
+  Reproduced both ways rather than assumed: without the driver the two appends
+  conflict; with it the merge is clean, both entries survive, and the new one
+  sits under `[Unreleased]` where it belongs. The test asserts the conflicting
+  direction too, because a fixture that does not reproduce the problem proves
+  nothing about the fix.
+
+  One hazard is documented rather than fixed, and it is **not** caused by this
+  change: while a release pull request is open it renames `[Unreleased]` to the
+  new version, a feature branch appending to `[Unreleased]` does not overlap
+  that rename, so git merges the two without stopping and the entry lands under
+  the released version. Measured with and without the union driver — identical
+  both times, because there is no conflict for a driver to resolve. It predates
+  this file; `RELEASE_PROCESS.md` now says what to check and when.
+
 ### Behoben / Fixed
 
 - **The "vehicle data hasn't refreshed" warning now says which car, and stops
