@@ -93,7 +93,7 @@ class VwDeReauthMixin:
             cookie_jar=aiohttp.CookieJar(unsafe=True),
         )
         self._ovw_connector = WebsiteAuthProxyConnector(
-            self._ovw_session, username, password, brand="volkswagen",
+            self._ovw_session, username, password,
         )
         try:
             result = await self._ovw_connector.begin_login()
@@ -132,8 +132,23 @@ class VwDeReauthMixin:
         return False
 
     async def _ovw_submit_otp(self, code: str) -> bool:
-        """Submit the OTP for the supplementary vw.de login."""
-        from .cariad.exceptions import AuthenticationError  # noqa: PLC0415
+        """Submit the OTP for the supplementary vw.de login.
+
+        #1843 (@kalwados) — the verdict here used to be ``invalid_credentials``
+        for every failure, i.e. "your username or password are wrong", at a step
+        the user only reaches BECAUSE their password was accepted: the e-mail
+        code exists only after a successful credential check. He typed a code he
+        had just received, was told his password was wrong, and gave up on the
+        channel until he happened to sign in on the site directly.
+
+        The password is never the answer here. A rejected code is a rejected
+        CODE, and an HTTP error from the site is neither — ``submit_otp`` raises
+        those separately now, so the two can be told apart.
+        """
+        from .cariad.exceptions import (  # noqa: PLC0415
+            AuthenticationError,
+            AuthProxyUnavailableError,
+        )
 
         if self._ovw_connector is None:
             raise ValueError("cannot_connect")
@@ -141,8 +156,14 @@ class VwDeReauthMixin:
             ok = bool(await self._ovw_connector.submit_otp(code))
             if ok:
                 self._ovw_cookies = self._ovw_capture_cookies()
+        except AuthProxyUnavailableError as err:
+            # The site failed while checking the code. Nothing the user types
+            # differently will help, so do not send them round the loop again.
+            _LOGGER.warning("Website authproxy OTP step: %s", err)
+            raise ValueError("upstream_unavailable") from err
         except AuthenticationError as err:
-            raise ValueError("invalid_credentials") from err
+            _LOGGER.debug("Website authproxy OTP step rejected the code")
+            raise ValueError("invalid_otp") from err
         except Exception as err:  # noqa: BLE001
             raise ValueError("cannot_connect") from err
         finally:

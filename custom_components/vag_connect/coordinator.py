@@ -3624,9 +3624,28 @@ class VagConnectCoordinator(DataUpdateCoordinator):
         # body when opted in (to sample the PPE E:CV.PA.31 rejection). Flag it too,
         # and count it toward the share prompt: a PPE reporter (Audi, no vw.de
         # channel) must still be asked to share, or the capture never reaches us.
-        has_bff = client is not None and hasattr(client, "command_captures")
-        if has_bff:
+        # #1805 (@bzykcar) — ``hasattr`` was always true here. ``command_captures``
+        # is created in the base client's ``__init__``, so every brand and every
+        # auth strategy matched it, and the share prompt went to anyone who
+        # enabled the cohort. He enabled it on a portal-only Audi, where there is
+        # no command path at all, and was asked to share a capture his entry
+        # cannot produce: the capture is written in the command confirm-poll, so
+        # no command means no capture, ever.
+        #
+        # ``is_structural_read_only()`` is this project's own answer to "can this
+        # entry send a command" (#543) — true exactly when the portal/website
+        # strategy leaves no command path and no MBB channel is armed. SEAT/CUPRA
+        # are structurally command-dead too and are counted by ``has_ola``
+        # below, so they keep their prompt; the ``or`` further down is what makes
+        # dropping them from THIS flag safe rather than silent.
+        #
+        # Still arm ``_test_cohort`` whenever the attribute exists: the flag also
+        # gates captures the client may take on paths other than a command, and
+        # narrowing the PROMPT must not narrow the opt-in itself.
+        can_capture = client is not None and hasattr(client, "command_captures")
+        if can_capture:
             client._test_cohort = cohort
+        has_bff = can_capture and not self.is_structural_read_only()
 
         # v4.4.0b3 — SEAT/CUPRA en_GB locale A/B probe. The OLA client captures a
         # localized-string sample (default vs en_GB) once per VIN when opted in;

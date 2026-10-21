@@ -796,8 +796,17 @@ class WebsiteAuthProxyConnector:
         session: ClientSession,
         email: str,
         password: str,
-        brand: str = "volkswagen",
     ) -> None:
+        # This connector is volkswagen.de, by construction and in every path
+        # below. It took a ``brand`` argument until #1805: the runtime passed
+        # the entry's real brand into it and the value was stored and never
+        # read again, so an Audi entry got the Volkswagen site while the
+        # signature said otherwise. @bzykcar's question was exactly "is there
+        # an Audi sign-in path left", and a parameter that looks like the
+        # answer is worse than no parameter: anyone wiring Audi through here
+        # would have seen a working login and concluded the lever existed.
+        # Supporting another brand means a real implementation, and that will
+        # need more than an argument -- so it comes back WITH one.
         # Provenance canary — referenced so a port of this module carries the
         # marker. Semantically inert (see _canaries.py). Literal embedded for
         # the canary-watch grep: website_authproxy_provenance_b6tkd2x9_2026
@@ -811,7 +820,17 @@ class WebsiteAuthProxyConnector:
         # import_cookies and all seven call sites below stay untouched.
         # Typed loosely on purpose: the adapter deliberately implements only
         # the slice of ClientSession this connector uses (see _http2.py).
-        self._aiohttp_session = session
+        #
+        # #1805 — there was a second copy of the raw session on ``self`` here
+        # (``self._aiohttp_session = session``), assigned once and read nowhere
+        # in the repository. It was not holding the session alive either:
+        # H2Session keeps its own reference, and a non-aiohttp double is kept
+        # as ``self._session`` directly, so the object has a strong referent on
+        # both branches below. Removed with the dead ``brand`` argument, and by
+        # the same test — a value stored and never read is indistinguishable
+        # from one that matters, which is how the brand argument stayed in long
+        # enough to look like Audi support.
+        #
         # Only a REAL aiohttp session is wrapped. The suite injects session
         # doubles (SimpleNamespace / AsyncMock) to drive the connector's own
         # logic; wrapping those would test the adapter's plumbing instead, and
@@ -822,7 +841,6 @@ class WebsiteAuthProxyConnector:
         )
         self._email = email
         self._password = password
-        self._brand = brand
         self.logged_in = False
         # Stashed between begin_login() and submit_otp(): the email-challenge
         # URL plus the Auth0 state needed to POST the OTP code.
@@ -1335,6 +1353,23 @@ class WebsiteAuthProxyConnector:
                 _safe_url(landed),
                 "present" if err else "none",
             )
+            # #1843 (@kalwados) — these are TWO different outcomes and they used
+            # to raise the same class, which the options flow then reported as
+            # "your username or password are wrong". He had just received the
+            # e-mail code and typed it correctly; his credentials had been
+            # accepted two steps earlier, which is WHY there was a code at all.
+            #
+            # An HTTP error is the site failing, not the code being wrong, and
+            # AuthProxyUnavailableError already means exactly that ("server-side
+            # failure, not your session"). Landing back on the challenge page is
+            # the only outcome that is plausibly about the code itself — and even
+            # then it is the CODE, never the password.
+            if landed_status >= 400:
+                raise AuthProxyUnavailableError(
+                    "Website authproxy: the site answered "
+                    f"{landed_status} while checking the e-mail code — this is "
+                    "a server-side failure, not your code or your password"
+                )
             raise AuthenticationError(
                 err or "Website authproxy: OTP rejected — check the code"
             )
@@ -2916,6 +2951,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy parkingposition read skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["parkingposition"] = f"error:{type(exc).__name__}"
 
             # SoH probe (4.3.2 batteryHealthState) — same opt-in test-cohort gate as
             # the GPS probe. The app reads SoH via the attestation-walled BFF
@@ -2938,6 +2981,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy SoH probe skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["soh"] = f"error:{type(exc).__name__}"
 
             # #1357 (Ra72xx) — EXPERIMENTAL measurements/range probe, same opt-in test-
             # cohort gate as the GPS / SoH probes. A portal-only ID.3 surfaces a null
@@ -2963,6 +3014,14 @@ class WebsiteAuthProxyConnector:
                         "Website authproxy measurements probe skipped for %s (%s)",
                         vin[-6:], type(exc).__name__,
                     )
+                    # #1805 — record the failure, not just a debug line. An
+                    # enabled probe that raised used to leave probe_outcomes as
+                    # empty as one that never ran, so the cohort diagnostics
+                    # could not tell "tried and was refused" from "never
+                    # attempted" -- the same distinction _record() calls out for
+                    # channels. Exception TYPE only: the message can carry a
+                    # host or a path.
+                    self.probe_outcomes["measurements"] = f"error:{type(exc).__name__}"
 
             if got_data:
                 d.connection_state = "online"

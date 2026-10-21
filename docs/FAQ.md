@@ -281,6 +281,78 @@ each):
 
 ---
 
+## 🛣️ My last-trip / short-term sensors went empty — where did they go?
+
+**Short answer:** Volkswagen stopped delivering the short-term trip cluster
+through the EU Data Act portal. Update to **v4.11.0 or later** and add the
+**volkswagen.de read channel** in the integration options; the same sensors
+fill again from there.
+
+The figures affected are the five short-term ones:
+
+- `last_trip_distance_km`
+- `last_trip_duration_min`
+- `last_trip_avg_speed_kmh`
+- `last_trip_avg_fuel_consumption_l_100km`
+- `last_trip_avg_electric_consumption_kwh_100km`
+
+### Why they vanished
+
+They were read from the EU Data Act portal's `short_term_data_*` fields, and
+**Volkswagen's** portal realm stopped carrying that cluster in September 2026.
+Nothing in the integration changed, and no setting on your side can bring it
+back.
+
+**This is specific to the Volkswagen realm.** The code that reads those fields
+is brand-agnostic — it takes whatever the portal delivers — so a **CUPRA or
+SEAT** entry fed by the portal can still receive the short-term figures, and on
+those cars "last trip distance is unknown" usually means the car has not
+uploaded a completed trip yet rather than that the data is gone. Give it a
+drive cycle or two before treating it as a fault.
+
+Saying that plainly matters here, because the reason this entry exists is a
+wording problem of exactly this kind: reports were answered at the time with
+"the cluster is gone, there is nothing to fix", which was true of the
+Volkswagen realm and **too broad as a general answer** — a parser for the other
+channel was already owed and shipped a week later.
+
+### How to get them back
+
+1. Update to v4.11.0 or later.
+2. **Settings → Devices & Services → VW Group Connect → Configure**
+3. Enable the supplementary **volkswagen.de** read channel and sign in.
+
+Available for **Volkswagen** and **Volkswagen Commercial Vehicles** entries.
+The channel is read-only — it never sends a command to the car.
+
+The sensors keep their existing `entity_id`s, so dashboards, automations and
+long-term statistics carry straight on. The values arrive with
+`source: vw.de website` in their attributes, which is how you can tell the
+channel is doing the work.
+
+### What it does NOT bring back
+
+Being straight about the limits, because "add the channel" is not a complete
+restoration:
+
+| Figure | Status |
+|---|---|
+| The five short-term figures above | restored by the channel |
+| Recuperation average | present in the data, **not yet mapped** — tracked on [#1437](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1437) |
+| Zero-emission distance | portal-only; **still missing** |
+| Range gained while charging | portal-only; **still missing** |
+
+### Trip sensors empty on an Audi — a different fault
+
+This entry is about the portal cluster. If your trip sensors are empty on an
+**Audi**, that is a different fault with a different cause — the integration
+calls an older trip endpoint that answers 404 on some models. Tracked on
+[#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805), and it
+needs one diagnostic run from an Audi owner whose manufacturer channel still
+works.
+
+---
+
 ## 📞 How do I report a bug?
 
 1. **Settings → Devices & Services → VW Group Connect → ⋮ → Diagnose herunterladen**

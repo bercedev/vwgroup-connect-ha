@@ -46,6 +46,55 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
 
 ## [Unreleased]
 
+### Geändert / Changed
+
+- **Removed a constructor argument that looked like multi-brand support and
+  did nothing.** While answering @bzykcar's question in
+  [#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805) —
+  whether any sign-in path is left that would reach the manufacturer channel
+  for an Audi — the volkswagen.de connector turned out to accept a `brand`
+  argument, and the runtime passed each entry's *real* brand into it. The value
+  was stored on the instance and never read again, by anything. The connector
+  is volkswagen.de in every path it has, so an Audi routed through it would
+  have signed in to the Volkswagen site successfully, and anyone treating the
+  argument as an Audi lever would have watched that work and believed it.
+
+  A missing parameter is a question you have to answer; a dead one is an answer
+  you can believe. Both it and a second never-read copy of the session object
+  beside it are gone. Supporting another brand here needs a real
+  implementation, and it will come back with one.
+
+  No behaviour changes for any existing entry: every call site already received
+  the Volkswagen site regardless of what it passed.
+
+- **CHANGELOG.md merges resolve themselves now.** Landing seven pull requests
+  on 2026-10-20 took **thirteen** CHANGELOG conflict resolutions, every one of
+  them identical: both sides had appended one entry at the same place and "keep
+  both" was always right. There was not a single code conflict in the batch —
+  three of the seven touched the same files and their changes sat 26 to 39
+  lines apart. All the friction came from one file.
+
+  A one-line `.gitattributes` (`CHANGELOG.md merge=union`) resolves that shape
+  with no markers and no human. It is only safe because of a property the
+  repository already had: `add_changelog_entry.py` is insert-only, so the two
+  sides of such a merge are additions in the same place rather than competing
+  edits — and a test now says that out loud, so the driver cannot outlive its
+  own justification.
+
+  Reproduced both ways rather than assumed: without the driver the two appends
+  conflict; with it the merge is clean, both entries survive, and the new one
+  sits under `[Unreleased]` where it belongs. The test asserts the conflicting
+  direction too, because a fixture that does not reproduce the problem proves
+  nothing about the fix.
+
+  One hazard is documented rather than fixed, and it is **not** caused by this
+  change: while a release pull request is open it renames `[Unreleased]` to the
+  new version, a feature branch appending to `[Unreleased]` does not overlap
+  that rename, so git merges the two without stopping and the entry lands under
+  the released version. Measured with and without the union driver — identical
+  both times, because there is no conflict for a driver to resolve. It predates
+  this file; `RELEASE_PROCESS.md` now says what to check and when.
+
 ### Behoben / Fixed
 
 - **An EV whose EU Data Act feed reports only the pack's energy content is
@@ -85,6 +134,150 @@ Versioning: [Semantic Versioning 2.0.0](https://semver.org/)
   car is read that way — and leave a working one alone — or, on a brand channel,
   nothing to re-add, the car simply has not reported. All twelve languages
   ([#1896](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1896)).
+
+- **The Scout's "official spec field" column stopped being empty for 2857 of
+  the catalogue's fields.** @GiuseppeAlbano's report
+  ([#1895](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1895))
+  listed one new Audi field with a dash where the official name belongs — and
+  that field is in the shipped catalogue twice, with a description. The lookup
+  reduced a dotted path to its last segment, on the assumption that a dot only
+  ever separates the container from the field name. 3206 of the 7990 field
+  names contain dots of their own: every `viwi_*` resource carries its
+  interface version, and the charging families are spelled as nested paths. His
+  field was looked up as `0_get_notifications`, which matches nothing. Only 349
+  of those 3206 resolved.
+
+  A quieter half came with it: `01_msp_elli.msp_elli_ocpi_cdr.currency`
+  resolved to the generic `currency` field — a different field with a different
+  unit and description — so a sensor auto-created from raw discovery could be
+  named and united from the wrong entry. Specific spellings are now tried
+  before general ones, and each index is consulted with the whole key rather
+  than only the tail.
+
+  Measured across every name, every prefixed name and every UUID in the
+  catalogue (21226 keys): 5714 that resolved to nothing now resolve, 698 now
+  resolve to their own exact entry instead of a generic one, and nothing that
+  resolved before stopped resolving.
+- **The FAQ now says where the vanished last-trip sensors went.**
+  @fschulte2812 ([#1437](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1437))
+  went thirteen days unanswered on a thread whose settled conclusion — "VW
+  dropped the short-term cluster, there is nothing to fix" — was true of the EU
+  Data Act portal and too broad as a general answer. The volkswagen.de channel
+  had carried those figures since v4.11.0, and the parser for it was already
+  owed when two reporters were told to stop looking. Nothing in the README or
+  the FAQ mentioned any of it, so anyone with the same symptom found the thread,
+  read the old conclusion and stopped.
+
+  There is a FAQ entry now: which five sensors are affected, why they emptied,
+  the three steps to get them back, and — because "add the channel" is not a
+  complete restoration — a table of what it does **not** bring back
+  (recuperation average, zero-emission distance, range gained while charging).
+  It also points Audi owners at their own, different fault instead of sending
+  them through a sign-in that cannot help them.
+
+  A stale instruction is worse than none, so a test checks that what the entry
+  claims is still true of the code: the sensor keys are read out of the
+  document and matched against the real ones, the brand list against the
+  channel's gate, and the `source: vw.de website` attribute against the label
+  the code generates. If any of them moves, the entry gets corrected instead of
+  quietly misleading the next reader.
+- **An unmappable field stops asking three different people to file it, and
+  dismissing the Scout card now sticks.** `eu_data_act.jobStatus` raised the
+  user-facing Scout repair three times — on Volkswagen
+  ([#1831](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1831)), on
+  an ID.7 Tourer GTX
+  ([#1838](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1838)) and
+  on a CUPRA Tavascan
+  ([#1861](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1861)).
+  The field is genuinely unmapped: the shipped catalogue has no entry for it at
+  all. It is now kept out of the repair while staying fully visible in
+  diagnostics — the samples (`JOBSTATUS_FLASHING`, `JOBSTATUS_DONE`) could be
+  portal export-job plumbing or a software-flash job running on the car, and
+  suppressing the data would close that question instead of answering it.
+
+  Two faults turned up while doing it. The skip list was matched
+  case-sensitively against a lower-case set, so adding the field as it is
+  spelled by anyone would have skipped nothing while the list looked like it
+  covered it. And the card was **deleted** whenever every finding was skipped,
+  which is not the same as having no findings: Home Assistant stores a
+  dismissal on the issue entry and deleting the entry discards it, so a field
+  that kept reappearing kept raising a fresh, un-ignored card at someone who
+  had already said no. Nothing-found still deletes the stale card; all-skipped
+  now leaves it alone.
+- **Plugged in and drawing nothing is no longer reported as charging.**
+  @plainmad ([#968](https://github.com/its-me-prash/vwgroup-connect-ha/issues/968))
+  runs a Golf GTE Mk8 whose energy provider smart-controls the session, and
+  captured the screen for the case nobody had: plugged in, charger supplying no
+  power. The app says *"Charging status. Battery charge level: 86 per cent.
+  Charging station shows current status"*, and we answered **charging** — as we
+  did for *"Battery 86 % • Check charging station"* and for the button
+  *"Start charging. Check charging status"*.
+
+  The rule ended in a bare-verb search: the word "Charging" (or "Lädt" /
+  "Wird geladen") anywhere in the label meant yes, with a list of explicit
+  not-charging phrasings in front of it. That list cannot be completed — app
+  4.3.2 needed one entry, 4.6.4 needs another, and "Start charging" was never
+  covered at all.
+
+  It now reads the state where the state is. Every dump we hold has one
+  grammar, *"Charging status. … N per cent. `<STATE>`"* plus a compact tile
+  whose state follows the separator, and the extracted clause decides. The bare
+  verb counts only as a complete clause — which is the whole distinction,
+  because the ID.3 on 4.3.2 writes the state as the bare word on a car that
+  really is charging. Wording we do not recognise returns unknown rather than
+  guessing, so the previous reading is left alone instead of being replaced by
+  a confident wrong one.
+
+  Measured over all seventeen battery fixtures: every label with a recorded
+  expectation now comes out right, against four wrong before, and about twenty
+  settings-screen labels ("Charging up to (50-100%)", "Reduced AC charging
+  current") stop reading as charging. His dump is committed as a fixture, with
+  his attribution.
+- **The test-cohort share prompt no longer goes to entries that cannot produce
+  a capture, and a probe that fails now says so.** @bzykcar
+  ([#1805](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1805))
+  enabled the opt-in cohort on a portal-only Audi, to help, and reported that
+  `probe_outcomes` stayed empty. He was right, and two faults made it read that
+  way.
+
+  The prompt was gated on `hasattr(client, "command_captures")` — an attribute
+  created unconditionally in the base client's `__init__`, so it was true for
+  every brand and every auth strategy. The gate tested that a Python attribute
+  existed, not that a channel was reachable. The capture it asks for is written
+  inside the command confirm-poll, so an entry with no command path can never
+  produce one; he was asked to share something that could not exist. It now
+  consults `is_structural_read_only()`, this project's own answer to whether an
+  entry can send a command. A working Audi with no volkswagen.de channel still
+  gets the prompt, which is what that gate was added for, and SEAT/CUPRA keep
+  theirs through the locale-capture flag.
+
+  Separately, the three opt-in probes (position, state of health, range
+  measurements) caught every exception, wrote one debug line and recorded
+  nothing — so a probe that ran and was refused left `probe_outcomes` exactly as
+  empty as one that never attempted anything. Each now records
+  `error:<ExceptionType>` under its own key, the exception type only and never
+  the message, which can carry a host or a path. The core read twenty lines
+  below them already did this, which made their silence an inconsistency rather
+  than a design choice.
+- **The e-mail code step no longer tells you your password is wrong.**
+  @kalwados added the volkswagen.de read channel, received the code by e-mail,
+  typed it, and was told *"Login failed; your username or password are wrong"* —
+  at a step he had only reached **because** his password was right. The code is
+  sent only after the credential check passes; the password is the one thing
+  that cannot be the problem there. He tried several times, gave up, signed in
+  on volkswagen.de in a browser, and only then could he add the channel.
+
+  A refused code now says the code was refused, in all 13 languages, and says
+  outright that the password is not the issue — on both the flow he used and
+  the setup flow a first-time install goes through, which had the same two
+  routes to the same wrong verdict and was found while tracing this one. And an HTTP error from the site
+  while the code is being checked is no longer reported as a bad code at all —
+  that is the site failing, and asking for a new code against a server that is
+  down cannot help. The sibling path at the password step was hardened for
+  exactly this in [#1313](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1313)
+  and [#1679](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1679)
+  ("only a genuine 401 keeps the credential verdict"); the code step never was.
+  ([#1843](https://github.com/its-me-prash/vwgroup-connect-ha/issues/1843))
 
 
 ## [5.1.0] - 2026-10-20 — Saying what actually happened / Sagen, was wirklich passiert ist

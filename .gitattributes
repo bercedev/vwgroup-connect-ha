@@ -1,0 +1,35 @@
+# CHANGELOG.md is append-only by construction, so a union merge is the correct
+# resolution for it.
+#
+# scripts/add_changelog_entry.py never rewrites the "## [Unreleased]" block; it
+# inserts one entry at the end of its section and leaves every other byte
+# alone. Two branches adding to the SAME section therefore collide at one
+# position, and "keep both entries" is always right. Before this file existed
+# that resolution was done by hand: merging seven pull requests on 2026-10-20
+# took thirteen of them, all identical, because each merge put the remaining
+# branches behind main again.
+#
+# Measured, not assumed, by reproducing both shapes in a throwaway repository:
+#
+#   two branches appending at the same anchor
+#     without union -> conflict, markers in the file
+#     with union    -> clean, both entries present, one [Unreleased] heading,
+#                      the new entry under [Unreleased] where it belongs
+#
+#   a release pull request (renaming [Unreleased] to a version) against a
+#   branch appending to [Unreleased]
+#     without union -> merges clean, the entry lands under the RELEASED
+#                      version, and check_changelog_structure.py passes
+#     with union    -> identical
+#
+# That second shape is worth being clear about: it is NOT caused by this file.
+# The rename and the append do not overlap textually, so git has no reason to
+# stop, union driver or not. The hazard predates this change and is unchanged
+# by it - see the note in RELEASE_PROCESS.md.
+#
+# What union cannot do is notice that it was wrong. It never reports a
+# conflict, so this file is only safe because the thing it resolves is
+# genuinely always "keep both": that property comes from the insert-only
+# writer, and if entries ever start being edited in place rather than appended,
+# this line has to go.
+CHANGELOG.md merge=union

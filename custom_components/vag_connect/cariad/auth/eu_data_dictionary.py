@@ -101,22 +101,81 @@ def _by_stripped_name() -> dict[str, dict[str, Any]]:
     return out
 
 
+_PATH_PREFIX = "eu_data_act."
+
+
+def _candidates(key: str) -> list[str]:
+    """The spellings of ``key`` to try, most specific first.
+
+    #1895 (@GiuseppeAlbano) — the Scout reported
+    ``eu_data_act.viwi_DriverNotification_1.2.0_get_notifications`` with an
+    empty spec column, and the catalogue describes that field by name. The old
+    code reduced a dotted path to ``key.rsplit(".", 1)[-1]``, its last segment,
+    on the assumption that a dot only ever separates the container from the
+    field. **3206 of the 7990 field names contain dots themselves**: every
+    ``viwi_*`` resource carries its interface version (``1.2.0``), and the
+    charging families are spelled as nested paths
+    (``01_msp_elli.msp_elli_ocpi_cdr.currency``). For those the last segment is
+    a fragment of the name — the field above was looked up as
+    ``0_get_notifications``, which matches nothing. Only 349 of the 3206
+    resolved, so the Scout printed an empty spec column for fields the
+    catalogue does describe, and raw discovery named their sensors after
+    nothing.
+
+    The name index was also only ever consulted with that last segment and
+    never with the whole key, so a name that *is* a dotted path could not be
+    found even when handed over exactly as the catalogue spells it.
+
+    So: the key as given, then the key with the portal's container prefix
+    removed, then — still, for anything that genuinely is
+    ``container.field`` — its last segment. Specific before general, which
+    also fixes the quieter half of this:
+    ``01_msp_elli.msp_elli_ocpi_cdr.currency`` used to resolve to the generic
+    ``currency`` field and now resolves to itself, so an auto-created sensor no
+    longer inherits a different field's unit and description.
+    """
+    out = [key]
+    if key.startswith(_PATH_PREFIX):
+        trimmed = key[len(_PATH_PREFIX):]
+        if trimmed and trimmed not in out:
+            out.append(trimmed)
+    if "." in key:
+        bare = key.rsplit(".", 1)[-1]
+        if bare and bare not in out:
+            out.append(bare)
+    return out
+
+
 def lookup(key: str | None) -> dict[str, Any] | None:
     """Return the spec entry for a field UUID **or official name**. Accepts a
-    dotted path (``eu_data_act.<field>``) and falls back to its last segment;
-    tries the UUID table first, then the name index, then the whitespace-
-    insensitive name index (see :func:`_by_stripped_name`)."""
+    dotted path (``eu_data_act.<field>``), a field name that itself contains
+    dots, and the bare last segment of a ``container.field`` path.
+
+    Each index is tried in turn — UUID table, then the name index, then the
+    whitespace-insensitive one (see :func:`_by_stripped_name`) — and within
+    each, the candidate spellings from :func:`_candidates`, most specific
+    first. Index order stays outside spelling order on purpose: an exact name
+    match beats a whitespace-collapsed one at any specificity, because the
+    collapsed index is the deliberate last resort described there.
+    """
     if not key:
         return None
     table = _load()
-    bare = key.rsplit(".", 1)[-1] if "." in key else key
-    entry = table.get(key) or table.get(bare)
-    if entry is None:
+    candidates = _candidates(key)
+    for cand in candidates:
+        entry = table.get(cand)
+        if entry is not None:
+            return entry
+    for cand in candidates:
         # portal payloads carry NAMES, not UUIDs → resolve via the name index
-        entry = _by_name().get(bare)
-    if entry is None:
-        entry = _by_stripped_name().get(_strip_ws(bare))
-    return entry
+        entry = _by_name().get(cand)
+        if entry is not None:
+            return entry
+    for cand in candidates:
+        entry = _by_stripped_name().get(_strip_ws(cand))
+        if entry is not None:
+            return entry
+    return None
 
 
 def describe(key: str | None) -> str | None:

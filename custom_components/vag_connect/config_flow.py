@@ -97,7 +97,8 @@ def _brand_label(brand: str) -> str:
 #:
 #: This was a bare ``!= "volkswagen"`` and refused Commercial Vehicles for no
 #: measured reason: nothing downstream of the gate is brand-specific, the
-#: connector is constructed with ``brand="volkswagen"`` either way, and the two
+#: connector is volkswagen.de for every caller (it used to take a ``brand``
+#: argument that was never read — removed in #1805), and the two
 #: brands are already treated as one thing where it matters most — Commercial
 #: Vehicles uses the same We Connect app, and its EU Data Act configuration is
 #: the Volkswagen one with a different state name (#1316). The reporter's own
@@ -452,6 +453,7 @@ def _map_error(err_code: str) -> str:
         "eu_signin_attestation",  # #1712 — the same wall on the CARIAD BFF (EU)
         "porsche_login_wall",  # b23 #1337 — Porsche captcha/consent wall past password
         "website_login_failed",  # #1679/#1313 — vw.de login failed, but NOT on the password
+        "invalid_otp",  # #1843 — the e-mail CODE was refused, never the password
     } else "cannot_connect"
 
 
@@ -1178,7 +1180,10 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
                             self._wap_cookies,
                         ),
                     )
-                errors["base"] = "invalid_credentials"
+                # #1843 — the second route to the same verdict. A False here
+                # means the login did not complete after the code; it is not
+                # the password, which was checked before the code was sent.
+                errors["base"] = "invalid_otp"
 
         return self.async_show_form(
             step_id="website_authproxy_otp",
@@ -1216,7 +1221,7 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
             cookie_jar=aiohttp.CookieJar(unsafe=True),
         )
         self._wap_connector = WebsiteAuthProxyConnector(
-            self._wap_session, username, password, brand="volkswagen",
+            self._wap_session, username, password,
         )
         try:
             result = await self._wap_connector.begin_login()
@@ -1251,7 +1256,10 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
 
     async def _wap_submit_otp(self, code: str) -> bool:
         """Submit the OTP against the open connector. Returns login success."""
-        from .cariad.exceptions import AuthenticationError  # noqa: PLC0415
+        from .cariad.exceptions import (  # noqa: PLC0415
+            AuthenticationError,
+            AuthProxyUnavailableError,
+        )
 
         if self._wap_connector is None:
             raise ValueError("cannot_connect")
@@ -1261,9 +1269,18 @@ class VagConnectConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: i
             # closes the session, so they can be persisted into entry.data.
             if ok:
                 self._wap_cookies = self._wap_capture_cookies()
+        except AuthProxyUnavailableError as err:
+            # #1843 — the site failed while checking the code. A new code
+            # cannot get past a server that is down.
+            _LOGGER.warning("Website authproxy OTP step: %s", err)
+            raise ValueError("upstream_unavailable") from err
         except AuthenticationError as err:
-            _LOGGER.warning("Website authproxy OTP failed: %s", err)
-            raise ValueError("invalid_credentials") from err
+            # #1843 — @kalwados hit this same verdict on the OPTIONS flow; this
+            # is its setup-time twin, on the path a first-time user takes. The
+            # e-mail code is sent only after the password has been accepted, so
+            # the password is the one thing that cannot be wrong here.
+            _LOGGER.warning("Website authproxy OTP step rejected the code: %s", err)
+            raise ValueError("invalid_otp") from err
         except Exception as err:  # noqa: BLE001
             _LOGGER.error(
                 "Website authproxy OTP unexpected error: %s",
@@ -4156,7 +4173,11 @@ class VagConnectOptionsFlow(VwDeReauthMixin, config_entries.OptionsFlow):
             else:
                 if ok:
                     return await self._ovw_finish()
-                errors["base"] = "invalid_credentials"
+                # #1843 — the second route to the same wrong verdict. A False
+                # here means the login did not complete after the code was
+                # accepted; it still is not the password, which was checked
+                # before the code was ever sent.
+                errors["base"] = "invalid_otp"
 
         return self.async_show_form(
             step_id="add_vwde_otp",
